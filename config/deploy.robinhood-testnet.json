@@ -1,0 +1,23 @@
+{
+  "_comment": "Robinhood Chain testnet (46630). Same PoolManager address and code hash as mainnet (checked 28 Oct 2026). WETH is the official L2 WETH from docs.robinhood.com/chain/protocol-contracts. Deployer and governor are a throwaway testnet wallet (.env.testnet, never committed). launchConfig uses tiny economics (graduation at about 0.0003 ETH) so the full lifecycle can be exercised with faucet ETH; mainnet economics live in deploy.robinhood-mainnet.json.",
+  "chainId": 46630,
+  "poolManager": "0x8366a39cc670b4001a1121b8f6a443a643e40951",
+  "poolManagerCodeHash": "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626",
+  "weth": "0x7943e237c7F95DA44E0301572D358911207852Fa",
+  "governor": "0x8720acfFCD741E58cd44fbb94Be8448AFE346255",
+  "platformRecipient": "0xad1841931b5dff2b572e4b97ad75d768603ed1b3",
+  "bloomBurnBps": 5000,
+  "bloom": {
+    "team": "0x3c7b522102eb9e82c0d9123bf1c10a0baa7a2731",
+    "metadataURI": "bloom-meta:0dac899e640c96fee59064b93bd0584b7050aec583d35b066a822078714b122a",
+    "phantomQuote": "90000000000000"
+  },
+  "deployer": "0x8720acfFCD741E58cd44fbb94Be8448AFE346255",
+  "extraQuoteAssets": [],
+  "extraLaunchConfigs": [],
+  "launchConfig": {
+    "supply": "1000000000000000000000000000",
+    "reservedTokens": "200000000000000000000000000",
+    "phantomQuote": "100000000000000"
+  }
+}

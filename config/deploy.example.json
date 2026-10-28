@@ -1,0 +1,16 @@
+{
+  "_comment": "Copy per network. Every null must be filled with a reviewed value before deployment. Economics below are the local prototype settings, not approved production economics.",
+  "chainId": null,
+  "poolManager": null,
+  "poolManagerCodeHash": null,
+  "weth": null,
+  "governor": null,
+  "platformRecipient": null,
+  "extraQuoteAssets": [],
+  "extraLaunchConfigs": [],
+  "launchConfig": {
+    "supply": "1000000000000000000000000000",
+    "reservedTokens": "200000000000000000000000000",
+    "phantomQuote": "1400000000000000000"
+  }
+}

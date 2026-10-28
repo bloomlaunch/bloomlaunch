@@ -1,0 +1,32 @@
+{
+  "name": "bloomlaunch-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BloomLaunch smart contracts: token launchpad on Robinhood Chain (bonding curve, Uniswap V4 graduation, holder rewards, buybacks, BLOOM burn).",
+  "license": "MIT",
+  "repository": "github:bloomlaunch/bloomlaunch",
+  "homepage": "https://bloomlaunch.fun",
+  "scripts": {
+    "compile": "node scripts/compile.mjs",
+    "build:production": "node scripts/compile.mjs --production",
+    "test": "node --test --test-concurrency=1 test/contracts.test.mjs test/v4.test.mjs test/deploy.test.mjs test/migration.test.mjs test/bloom.test.mjs test/invariants.test.mjs",
+    "test:fuzz": "node --test test/invariants.test.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "verify:sourcify": "node scripts/verify-sourcify.mjs config/robinhood-mainnet.deployment.json",
+    "verify:etherscan": "node scripts/verify-etherscan.mjs verification/robinhood-mainnet.json"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.6.1",
+    "@uniswap/v4-core": "1.0.2",
+    "ethers": "6.17.0"
+  },
+  "devDependencies": {
+    "hardhat": "3.21.1",
+    "solc": "0.8.38",
+    "solc-0826": "npm:solc@0.8.26"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

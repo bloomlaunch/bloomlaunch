@@ -1,0 +1,26 @@
+{
+  "chainId": 4663,
+  "rpc": "https://rpc.mainnet.chain.robinhood.com",
+  "block": 99497221,
+  "referenceOnly": true,
+  "referenceFactory": "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e",
+  "source": "https://docs.ponsfamily.com/v2",
+  "dependencies": {
+    "poolManager()": {
+      "address": "0x8366a39cc670b4001a1121b8f6a443a643e40951",
+      "runtimeCodeBytes": 24009,
+      "runtimeCodeHash": "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626"
+    },
+    "positionManager()": {
+      "address": "0x58daec3116aae6d93017baaea7749052e8a04fa7",
+      "runtimeCodeBytes": 23877,
+      "runtimeCodeHash": "0xc873e135dc9aaec88489cfbad146b4cb49d6a32e0d80326377784b7ba17670b2"
+    },
+    "permit2()": {
+      "address": "0x000000000022d473030f116ddee9f6b43ac78ba3",
+      "runtimeCodeBytes": 9152,
+      "runtimeCodeHash": "0x5208783f52488f7d3493e5e38311ab707c1d75457fe472a19b0b4d57d66a7fca"
+    }
+  },
+  "notes": "Addresses read from Pons factory for external infrastructure research. Not Spryvex deployments. Code presence and hash do not establish source verification or suitability."
+}
