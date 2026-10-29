@@ -1,6 +1,6 @@
 // Publishes the source of every deployed BloomLaunch contract on Sourcify (free, no API key), which
 // recompiles it from the exact standard-JSON input used for the deployment and checks the bytecode.
-// Usage: node scripts/verify-sourcify.mjs [deployments/4663.json]
+// Usage: node scripts/verify-sourcify.mjs [deployments/4663.json | deployments/4663-v2.json]
 import fs from 'node:fs';
 import { JsonRpcProvider } from 'ethers';
 import { attach } from './deploy-lib.mjs';
@@ -15,7 +15,11 @@ const compilerVersion = JSON.parse(fs.readFileSync('artifacts/production-cache.j
 const rpc = { 4663: 'https://rpc.mainnet.chain.robinhood.com', 46630: 'https://rpc.testnet.chain.robinhood.com' }[d.chainId];
 const provider = new JsonRpcProvider(rpc, undefined, { staticNetwork: true });
 const c = d.contracts;
-const factory = attach(artifacts, 'contracts/LaunchFactory.sol', 'LaunchFactory', c.LaunchFactory, provider);
+// v2 deployments use the v2 factory, router, deployer and curve; everything else is shared code.
+const v2 = d.version === 2 || Number(d.config?.version) === 2;
+const id = (file, name) => v2 && { LaunchFactory: 1, LaunchRouter: 1, LaunchDeployer: 1, BondingCurve: 1 }[name]
+  ? `contracts/v2/${name}V2.sol:${name}V2` : `contracts/${file}:${name}`;
+const factory = attach(artifacts, ...id('LaunchFactory.sol', 'LaunchFactory').split(':'), c.LaunchFactory, provider);
 const bloomCurve = d.bloom ? (await factory.launches(d.bloom)).curve : null;
 
 const targets = [
@@ -25,15 +29,15 @@ const targets = [
   ['LiquidityLocker', c.LiquidityLocker, 'contracts/v4/LiquidityLocker.sol:LiquidityLocker'],
   ['BloomBuybackBurner', c.BloomBuybackBurner, 'contracts/BloomBuybackBurner.sol:BloomBuybackBurner'],
   ['BloomBurnAdapter', c.BloomBurnAdapter, 'contracts/v4/CanonicalBuybackAdapter.sol:CanonicalBuybackAdapter'],
-  ['LaunchFactory', c.LaunchFactory, 'contracts/LaunchFactory.sol:LaunchFactory'],
-  ['LaunchDeployer', await factory.deployer(), 'contracts/LaunchDeployer.sol:LaunchDeployer'],
+  ['LaunchFactory', c.LaunchFactory, id('LaunchFactory.sol', 'LaunchFactory')],
+  ['LaunchDeployer', await factory.deployer(), id('LaunchDeployer.sol', 'LaunchDeployer')],
   ['BloomFeeHook', c.BloomFeeHook, 'contracts/v4/BloomFeeHook.sol:BloomFeeHook'],
-  ['LaunchRouter', c.LaunchRouter, 'contracts/LaunchRouter.sol:LaunchRouter'],
+  ['LaunchRouter', c.LaunchRouter, id('LaunchRouter.sol', 'LaunchRouter')],
   ['LimitOrderExecutor', c.LimitOrderExecutor, 'contracts/LimitOrderExecutor.sol:LimitOrderExecutor'],
-  ['MigrationFactory', c.MigrationFactory, 'contracts/migration/MigrationFactory.sol:MigrationFactory'],
+  ...(c.MigrationFactory ? [['MigrationFactory', c.MigrationFactory, 'contracts/migration/MigrationFactory.sol:MigrationFactory']] : []),
   ...(d.teamVesting ? [['TeamVesting', d.teamVesting, 'contracts/TeamVesting.sol:TeamVesting']] : []),
   ...(d.bloom ? [['BLOOM (LaunchToken)', d.bloom, 'contracts/LaunchToken.sol:LaunchToken'],
-    ['BLOOM curve (BondingCurve)', bloomCurve, 'contracts/BondingCurve.sol:BondingCurve']] : []),
+    [`BLOOM curve (BondingCurve${v2 ? 'V2' : ''})`, bloomCurve, id('BondingCurve.sol', 'BondingCurve')]] : []),
 ];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));

@@ -3,18 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "BloomLaunch smart contracts: token launchpad on Robinhood Chain (bonding curve, Uniswap V4 graduation, holder rewards, buybacks, BLOOM burn).",
+  "description": "BloomLaunch smart contracts: token launchpad on Robinhood Chain (bonding curves that present as Uniswap V3 pools, Uniswap V4 graduation, holder rewards, buybacks, BLOOM burn).",
   "license": "MIT",
   "repository": "github:bloomlaunch/bloomlaunch",
   "homepage": "https://bloomlaunch.fun",
   "scripts": {
     "compile": "node scripts/compile.mjs",
     "build:production": "node scripts/compile.mjs --production",
-    "test": "node --test --test-concurrency=1 test/contracts.test.mjs test/v4.test.mjs test/deploy.test.mjs test/migration.test.mjs test/bloom.test.mjs test/invariants.test.mjs",
+    "test": "node --test --test-concurrency=1 test/contracts.test.mjs test/v4.test.mjs test/deploy.test.mjs test/migration.test.mjs test/bloom.test.mjs test/invariants.test.mjs test/v2.test.mjs",
     "test:fuzz": "node --test test/invariants.test.mjs",
     "deploy": "node scripts/deploy.mjs",
     "verify:sourcify": "node scripts/verify-sourcify.mjs config/robinhood-mainnet.deployment.json",
-    "verify:etherscan": "node scripts/verify-etherscan.mjs verification/robinhood-mainnet.json"
+    "verify:etherscan": "node scripts/verify-etherscan.mjs verification/robinhood-mainnet-v2.json"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.6.1",

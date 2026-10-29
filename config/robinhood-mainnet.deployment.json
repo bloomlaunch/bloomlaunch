@@ -1,26 +1,27 @@
 {
+  "version": 2,
   "chainId": 4663,
   "deployer": "0xCEF04dF113aaAC54d23c6180e23196590e7c557c",
-  "hookSalt": "0x0000000000000000000000000000000000000000000000000000000000003d2d",
+  "hookSalt": "0x000000000000000000000000000000000000000000000000000000000000310d",
   "contracts": {
-    "FeeEscrow": "0xBBe04bFA997f1c80B8162ae6E1D4b9d3b3296400",
-    "CanonicalBuybackAdapter": "0xDdaAfE699664A65181d848d545dD121272EB3091",
-    "BuybackVestingVault": "0x45106872b07ba18AE79a91049DFEB4169D80e118",
-    "LiquidityLocker": "0x7Cd89B0255410DA177B8d9cCCAAFb3250061E2C9",
-    "BloomBuybackBurner": "0x8F0911BeFD99bbb0EF3868780DCdF41CfCfA3E97",
-    "BloomBurnAdapter": "0x49e740568706b543472Cf47912d79bD315A71643",
-    "LaunchFactory": "0x4c26b5dA7BBfD8d05A2e7a682034C6842F2d6b04",
-    "BloomFeeHook": "0xd4fF3e6982525b9cD8C1F286FbD62ef95F67e0CC",
-    "LaunchRouter": "0xBA99f5E8391125Cc58D81569FD8d4Cdf2618473D",
-    "LimitOrderExecutor": "0x6A1b9516d5A2c985C8f92e2F4Bc5c186056515eE",
-    "MigrationFactory": "0x6799eEc66f8E2F75aD5893422c747b97f68452C4"
+    "FeeEscrow": "0x9A637F978e7856BEB6146a92ABA518bb9528204A",
+    "CanonicalBuybackAdapter": "0x05478530278EDB9a74e4B56eFaF69d275C7B7f9A",
+    "BuybackVestingVault": "0x98cCbf00375FA1E0cD1334186acD0F52fB276B9d",
+    "LiquidityLocker": "0xCbe444408d4513a828Fc1FEc41F238ec5797BBb8",
+    "BloomBuybackBurner": "0x41957065bdd015f114fDa501d97Bf37FBDEfceeB",
+    "BloomBurnAdapter": "0x4EbB4f9f6c9317040D65102623F1599CBd3DD323",
+    "LaunchFactory": "0x1D797BbAb0Bb1d3cb575139898e8ceA1B71059D2",
+    "BloomFeeHook": "0xc7279d1Dc8b3F693Af1F5C77408546F3d5AAE0CC",
+    "LaunchRouter": "0x5283A23a0D0872D74Ae448Fb6918e01D1faAbfb8",
+    "LimitOrderExecutor": "0x8B5452bcc0c4cF64481104A820A86CCc499B8DD0"
   },
   "pendingOwner": "0xcef04df113aaac54d23c6180e23196590e7c557c",
-  "block": 100178089,
-  "bloom": "0xBdF115C7e3aB044B7272F72dAad5Fd7FC895B00B",
-  "teamVesting": "0xA9d436aF7c69634DFb591b0BC25505b2034D516d",
+  "block": 100754189,
+  "bloom": "0x483Dba52c4A497B3a2b979D28beB26A525F7b00B",
+  "teamVesting": "0x7F3F68170476Fe5Af67273eda38bcc4a53b05226",
+  "startBlock": 100752870,
   "config": {
-    "_comment": "Robinhood Chain mainnet. Checked onchain 28 Oct 2026 at block 99,940,449. governor is the deploying wallet for now. A 2-of-3 Safe for later is already created at 0xdBBE93e3AeEb9d74E189927bE4d0FBb0C803bcCD (owners: deployer, treasury, team; tx 0x4a2c3858...1313): to activate it, call transferOwnership(safe) on LaunchFactory and MigrationFactory, then acceptOwnership() from the Safe on each. launchConfig values are the prototype economics (graduation at about 4.2 ETH) and must be confirmed. Do not deploy before testnet runs and an independent security review.",
+    "_comment": "Robinhood Chain mainnet, BloomLaunch v2: curves that present as Uniswap V3 pools, an onchain launch fee and a minimum first (dev) buy, and BLOOM relaunched on v2 (100M team reserve: 50M unlocked, 50M vesting 12 months). launchFeeWei is about $0.10 and minInitialBuyWei about $0.05 at ETH $2,300 (29 Oct 2026); the governor can change both with setLaunchTerms, each capped at 0.001 ETH. Same governor, treasury and economics as v1. v1 contracts stay onchain and keep working; the site shows v2 only. A 2-of-3 Safe for later is at 0xdBBE93e3AeEb9d74E189927bE4d0FBb0C803bcCD.",
     "chainId": 4663,
     "poolManager": "0x8366a39cc670b4001a1121b8f6a443a643e40951",
     "poolManagerCodeHash": "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626",
@@ -39,8 +40,10 @@
       "supply": "1000000000000000000000000000",
       "reservedTokens": "200000000000000000000000000",
       "phantomQuote": "1400000000000000000"
-    }
+    },
+    "version": 2,
+    "launchFeeWei": "43000000000000",
+    "minInitialBuyWei": "22000000000000"
   },
-  "deployedAt": "2026-10-28T15:30:00.547Z",
-  "startBlock": 100177125
+  "deployedAt": "2026-10-29T08:11:04.686Z"
 }

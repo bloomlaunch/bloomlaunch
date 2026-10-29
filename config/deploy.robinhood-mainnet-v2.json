@@ -1,0 +1,25 @@
+{
+  "_comment": "Robinhood Chain mainnet, BloomLaunch v2: curves that present as Uniswap V3 pools, an onchain launch fee and a minimum first (dev) buy, and BLOOM relaunched on v2 (100M team reserve: 50M unlocked, 50M vesting 12 months). launchFeeWei is about $0.10 and minInitialBuyWei about $0.05 at ETH $2,300 (29 Oct 2026); the governor can change both with setLaunchTerms, each capped at 0.001 ETH. Same governor, treasury and economics as v1. v1 contracts stay onchain and keep working; the site shows v2 only. A 2-of-3 Safe for later is at 0xdBBE93e3AeEb9d74E189927bE4d0FBb0C803bcCD.",
+  "chainId": 4663,
+  "poolManager": "0x8366a39cc670b4001a1121b8f6a443a643e40951",
+  "poolManagerCodeHash": "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626",
+  "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+  "governor": "0xcef04df113aaac54d23c6180e23196590e7c557c",
+  "platformRecipient": "0xad1841931b5dff2b572e4b97ad75d768603ed1b3",
+  "bloomBurnBps": 5000,
+  "bloom": {
+    "team": "0x3c7b522102eb9e82c0d9123bf1c10a0baa7a2731",
+    "metadataURI": "bloom-meta:0dac899e640c96fee59064b93bd0584b7050aec583d35b066a822078714b122a"
+  },
+  "deployer": "0xcef04df113aaac54d23c6180e23196590e7c557c",
+  "extraQuoteAssets": [],
+  "extraLaunchConfigs": [],
+  "launchConfig": {
+    "supply": "1000000000000000000000000000",
+    "reservedTokens": "200000000000000000000000000",
+    "phantomQuote": "1400000000000000000"
+  },
+  "version": 2,
+  "launchFeeWei": "43000000000000",
+  "minInitialBuyWei": "22000000000000"
+}

@@ -38,7 +38,10 @@ export function mineHookSalt(deployer, initCode) {
 /// artifacts. The signer is supplied by the caller; this module never reads keys.
 /// Ownership is offered to `config.governor` via Ownable2Step and must be
 /// accepted by that account (normally a multisig).
-export async function deploySystem({ signer, artifacts, config, log = () => {} }) {
+export async function deploySystem({ signer, artifacts, config, v2 = false, launchFee = 0n, minInitialBuy = 0n, log = () => {} }) {
+  // v2: curves present as Uniswap V3-style pools; launches pay a fee and make a minimum dev buy.
+  const FACTORY = v2 ? ['contracts/v2/LaunchFactoryV2.sol', 'LaunchFactoryV2'] : ['contracts/LaunchFactory.sol', 'LaunchFactory'];
+  const ROUTER = v2 ? ['contracts/v2/LaunchRouterV2.sol', 'LaunchRouterV2'] : ['contracts/LaunchRouter.sol', 'LaunchRouter'];
   const economics = validateConfig(config);
   const provider = signer.provider;
   const { chainId } = await provider.getNetwork();
@@ -80,7 +83,7 @@ export async function deploySystem({ signer, artifacts, config, log = () => {} }
     await deploy('BloomBurnAdapter', 'contracts/v4/CanonicalBuybackAdapter.sol', 'CanonicalBuybackAdapter', [config.poolManager, deployerAddress]);
     platformRecipient = deployed.BloomBuybackBurner;
   }
-  const factory = await deploy('LaunchFactory', 'contracts/LaunchFactory.sol', 'LaunchFactory',
+  const factory = await deploy('LaunchFactory', ...FACTORY,
     [deployerAddress, platformRecipient, deployed.FeeEscrow, deployed.BuybackVestingVault, config.poolManager, deployed.LiquidityLocker]);
   const hookArtifact = art('contracts/v4/BloomFeeHook.sol', 'BloomFeeHook');
   const bytecode = hookArtifact.evm.bytecode.object.startsWith('0x') ? hookArtifact.evm.bytecode.object : '0x' + hookArtifact.evm.bytecode.object;
@@ -93,7 +96,7 @@ export async function deploySystem({ signer, artifacts, config, log = () => {} }
   await send('locker.bind', locker.bind(deployed.LaunchFactory, hookAddress));
   await send('vault.bindFactory', vault.bindFactory(deployed.LaunchFactory));
   await send('adapter.bindVault', adapter.bindVault(deployed.BuybackVestingVault));
-  await deploy('LaunchRouter', 'contracts/LaunchRouter.sol', 'LaunchRouter', [deployed.LaunchFactory, config.poolManager, config.weth]);
+  await deploy('LaunchRouter', ...ROUTER, [deployed.LaunchFactory, config.poolManager, config.weth]);
   await send('factory.bindRouter', factory.bindRouter(deployed.LaunchRouter));
   await deploy('LimitOrderExecutor', 'contracts/LimitOrderExecutor.sol', 'LimitOrderExecutor', [deployed.LaunchRouter]);
   for (const quote of new Set([config.weth, ...(config.extraQuoteAssets ?? []), ...economics.map(e => e.quote)])) {
@@ -102,13 +105,15 @@ export async function deploySystem({ signer, artifacts, config, log = () => {} }
   for (const e of economics) {
     await send(`factory.addConfig ${e.quote}`, factory.addConfig({ ...e, executor: deployed.LiquidityLocker, enabled: true }));
   }
+  if (v2 && (launchFee || minInitialBuy)) await send('factory.setLaunchTerms', factory.setLaunchTerms(launchFee, minInitialBuy));
   // Migrations are created by the governor directly, so the governor owns this factory from the start.
-  await deploy('MigrationFactory', 'contracts/migration/MigrationFactory.sol', 'MigrationFactory',
+  // v1 only: the v1 Migration launches through factory.launch, which v2 replaces with the fee-charging router.
+  if (!v2) await deploy('MigrationFactory', 'contracts/migration/MigrationFactory.sol', 'MigrationFactory',
     [config.governor, deployed.LaunchFactory, config.poolManager]);
   if (config.governor.toLowerCase() !== deployerAddress.toLowerCase()) {
     await send('factory.transferOwnership (pending governor acceptance)', factory.transferOwnership(config.governor));
   }
-  return { chainId: Number(chainId), deployer: deployerAddress, hookSalt: salt, contracts: deployed,
+  return { version: v2 ? 2 : 1, chainId: Number(chainId), deployer: deployerAddress, hookSalt: salt, contracts: deployed,
     pendingOwner: config.governor, block: await provider.getBlockNumber() };
 }
 
@@ -121,9 +126,10 @@ export function attach(artifacts, file, name, address, runner) {
 /// team vesting contract: half unlocked at launch, half linear over 12 months. Then binds the buyback-and-burn contract.
 /// The signer must still be the factory owner and the deployment bootstrapper (run it right
 /// after deploySystem, before the governor accepts ownership).
-export async function launchBloom({ signer, artifacts, contracts, weth, team, poolManagerLocker, params = {},
+export async function launchBloom({ signer, artifacts, contracts, weth, team, poolManagerLocker, params = {}, v2 = false,
   vestingSeconds = 365n * 86400n, immediateBps = 5000n, phantomQuote = 126n * 10n ** 16n, mineTokenSalt, log = () => {} }) {
-  const factory = attach(artifacts, 'contracts/LaunchFactory.sol', 'LaunchFactory', contracts.LaunchFactory, signer);
+  const factory = v2 ? attach(artifacts, 'contracts/v2/LaunchFactoryV2.sol', 'LaunchFactoryV2', contracts.LaunchFactory, signer)
+    : attach(artifacts, 'contracts/LaunchFactory.sol', 'LaunchFactory', contracts.LaunchFactory, signer);
   const creator = await signer.getAddress();
   const provider = signer.provider;
   const start = BigInt((await provider.getBlock('latest')).timestamp);
@@ -154,3 +160,7 @@ export async function launchBloom({ signer, artifacts, contracts, weth, team, po
   log('burner and burn adapter bound to BLOOM');
   return { bloom, vesting: await vesting.getAddress() };
 }
+
+
+/// Deploys the complete BloomLaunch v2 system (see deploySystem with v2: true).
+export const deploySystemV2 = options => deploySystem({ ...options, v2: true });

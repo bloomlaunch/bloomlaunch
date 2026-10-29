@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import readline from 'node:readline';
 import { JsonRpcProvider, NonceManager, Wallet, keccak256 } from 'ethers';
 import { deploySystem, validateConfig, launchBloom, CREATE2_PROXY } from './deploy-lib.mjs';
+// config.version 2 deploys BloomLaunch v2 (V3-style curves, launch fee and minimum dev buy in launchFeeWei / minInitialBuyWei).
 import { mineTokenSalt } from '../sdk/vanity.mjs';
 
 /// Builds the signer without ever printing the key: a malformed key gives a generic error.
@@ -55,7 +56,8 @@ const mainnet = chainId === MAINNET_CHAIN_ID;
 if (mainnet && !process.argv.includes('--confirm-mainnet')) {
   throw new Error('Robinhood Chain mainnet requires --confirm-mainnet, a reviewed config and a completed security review');
 }
-const outFile = `deployments/${chainId}.json`;
+const v2 = Number(config.version ?? 1) === 2;
+const outFile = `deployments/${chainId}${v2 ? '-v2' : ''}.json`;
 if (fs.existsSync(outFile) && !process.argv.includes('--redeploy')) {
   throw new Error(`${outFile} already exists: this chain already has a deployment. Pass --redeploy to deploy a second system.`);
 }
@@ -82,8 +84,10 @@ console.log(`Governor        ${config.governor}`);
 console.log(`Platform fees   0.20% per trade -> BLOOM burner (${(config.bloomBurnBps ?? 0) / 100}% buy-and-burn, rest to treasury ${config.platformRecipient})`);
 console.log(`Launch curve    ${Number(supply / 10n ** 18n).toLocaleString()} tokens; graduates after ~${eth(raise)} ETH raised (market cap ~${eth(gradCap)} ETH)`);
 if (config.bloom) console.log(`BLOOM           team ${config.bloom.team}: 100M reserve, 50M unlocked at launch, 50M vesting 12 months`);
+if (v2) console.log(`v2 launch terms launch fee ${eth(BigInt(config.launchFeeWei ?? 0))} ETH + minimum dev buy ${eth(BigInt(config.minInitialBuyWei ?? 0))} ETH per launch`);
 console.log('Contracts are immutable once deployed.\n');
-if (balance < estimate * 2n) throw new Error(`balance is below twice the estimated cost; top up the deployer first. Nothing was sent.`);
+// The full v2 deploy measured ~27M gas on testnet (same gas units as mainnet); 30M plus a 25% margin covers it.
+if (balance < estimate * 5n / 4n) throw new Error(`balance is below the estimated cost plus a 25% margin; top up the deployer first. Nothing was sent.`);
 if (process.stdin.isTTY && (await ask(`Type DEPLOY to send the transactions, anything else to cancel: `)) !== 'DEPLOY') {
   console.log('Cancelled. Nothing was sent.');
   process.exit(0);
@@ -91,14 +95,16 @@ if (process.stdin.isTTY && (await ask(`Type DEPLOY to send the transactions, any
 fs.mkdirSync('deployments', { recursive: true });
 const logFile = `deployments/${chainId}-deploy.log`;
 const log = line => { console.log(line); fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`); };
-const result = await deploySystem({ signer, artifacts, config, log });
+const startBlock = await provider.getBlockNumber();   // the indexer starts here
+const result = await deploySystem({ signer, artifacts, config, log, v2,
+  launchFee: BigInt(config.launchFeeWei ?? 0), minInitialBuy: BigInt(config.minInitialBuyWei ?? 0) });
 // BLOOM must launch before the governor accepts ownership (the deployer is still owner).
 if (config.bloom && config.bloomBurnBps != null) {
   const { bloom, vesting } = await launchBloom({ signer, artifacts, contracts: result.contracts, weth: config.weth,
     team: config.bloom.team, params: { metadataURI: config.bloom.metadataURI ?? '' }, mineTokenSalt,
-    ...(config.bloom.phantomQuote ? { phantomQuote: BigInt(config.bloom.phantomQuote) } : {}), log });
+    ...(config.bloom.phantomQuote ? { phantomQuote: BigInt(config.bloom.phantomQuote) } : {}), v2, log });
   Object.assign(result, { bloom, teamVesting: vesting });
 }
-fs.writeFileSync(outFile, JSON.stringify({ ...result, config, deployedAt: new Date().toISOString() }, null, 2));
+fs.writeFileSync(outFile, JSON.stringify({ ...result, startBlock, config, deployedAt: new Date().toISOString() }, null, 2));
 console.log(`\nDone. Wrote ${outFile}; deployer balance now ${eth(await provider.getBalance(signerAddress))} ETH.`);
 if (config.governor.toLowerCase() !== signerAddress.toLowerCase()) console.log(`Governor ${config.governor} must call acceptOwnership() on the factory.`);

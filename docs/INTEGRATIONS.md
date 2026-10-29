@@ -14,18 +14,18 @@ all contracts are source-verified on Etherscan, Blockscout and Sourcify.
 | RPC | https://rpc.mainnet.chain.robinhood.com |
 | Explorers | https://robin.etherscan.io, https://robinhoodchain.blockscout.com |
 | Deployed from block | **100177125** (28 Oct 2026) |
-| Platform token | BLOOM `0xBdF115C7e3aB044B7272F72dAad5Fd7FC895B00B` |
+| Platform token | BLOOM `0x483Dba52c4A497B3a2b979D28beB26A525F7b00B` |
 | X | https://x.com/bloomlaunch |
 | Source code | https://github.com/bloomlaunch/bloomlaunch |
-| Contact | https://bloomlaunch.fun/#/builders (integration form) |
+| Contact | https://bloomlaunch.fun/builders (integration form) |
 
 ## Contracts
 | Contract | Address | Role |
 |---|---|---|
-| LaunchFactory | `0x4c26b5dA7BBfD8d05A2e7a682034C6842F2d6b04` | Creates every token and its bonding curve; emits launches and graduations |
-| LaunchRouter | `0xBA99f5E8391125Cc58D81569FD8d4Cdf2618473D` | User entry point for buys and sells on the curve or the pool |
-| BloomFeeHook | `0xd4fF3e6982525b9cD8C1F286FbD62ef95F67e0CC` | Uniswap V4 hook on every graduated pool |
-| LiquidityLocker | `0x7Cd89B0255410DA177B8d9cCCAAFb3250061E2C9` | Creates the V4 pool at graduation and locks its liquidity permanently |
+| LaunchFactory | `0x1D797BbAb0Bb1d3cb575139898e8ceA1B71059D2` | Creates every token and its bonding curve; emits launches and graduations |
+| LaunchRouter | `0x5283A23a0D0872D74Ae448Fb6918e01D1faAbfb8` | User entry point for buys and sells on the curve or the pool |
+| BloomFeeHook | `0xc7279d1Dc8b3F693Af1F5C77408546F3d5AAE0CC` | Uniswap V4 hook on every graduated pool |
+| LiquidityLocker | `0xCbe444408d4513a828Fc1FEc41F238ec5797BBb8` | Creates the V4 pool at graduation and locks its liquidity permanently |
 | Uniswap V4 PoolManager | `0x8366a39cc670b4001a1121b8f6a443a643e40951` | Canonical Robinhood Chain V4 PoolManager |
 | WETH (quote asset) | `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` | Every launch is currently paired with ETH |
 
@@ -43,7 +43,7 @@ all contracts are source-verified on Etherscan, Blockscout and Sourcify.
 
 ## Events to index
 
-### New tokens: LaunchFactory `0x4c26b5dA7BBfD8d05A2e7a682034C6842F2d6b04`
+### New tokens: LaunchFactory `0x1D797BbAb0Bb1d3cb575139898e8ceA1B71059D2`
 ```
 event TokenLaunched(address indexed token, address indexed curve, address indexed creator, address quote, uint256 configId)
 topic0 0x2caa4aa609b0b535621db8389bd14bcffb5c2ab47882c20f97e63a41381803c8
@@ -62,13 +62,19 @@ topic0 0x9adcf0ad0cda63c4d50f26a48925cf6405df27d422a39c456b5f03f661c82982
 - `trader` is the caller, usually the LaunchRouter or LimitOrderExecutor; `recipient` is the wallet receiving the tokens or proceeds.
   For "maker" attribution use `recipient`, or the `trader` field of the router's RoutedTrade event below.
 
+### Uniswap V3-compatible view of each curve
+Every curve also behaves like a Uniswap V3 pool between the token and WETH, so V3-aware indexers need no custom code:
+the factory emits `PoolCreated(token0, token1, fee, 1, curve)` at launch, the curve emits `Initialize` and the standard
+V3 `Swap(sender, recipient, amount0, amount1, sqrtPriceX96, liquidity, tick)` on every trade, and answers `token0()`,
+`token1()`, `factory()`, `fee()`, `tickSpacing()`, `slot0()` and `liquidity()`. `liquidity()` is 0 after graduation.
+
 ### Graduation: LaunchFactory
 ```
 event Graduated(address indexed token, bytes32 indexed poolId)
 topic0 0xfbf67b106a3384ccd21d69e049cb8487d547a01fe9120407840d191b4577e5ed
 ```
 After this, the token trades only in the Uniswap V4 pool `poolId`. Pool key: currencies sorted (token, WETH), `fee = 0`,
-`tickSpacing = 200`, `hooks = 0xd4fF3e6982525b9cD8C1F286FbD62ef95F67e0CC`. Standard PoolManager `Initialize` and `Swap`
+`tickSpacing = 200`, `hooks = 0xc7279d1Dc8b3F693Af1F5C77408546F3d5AAE0CC`. Standard PoolManager `Initialize` and `Swap`
 events apply. The hook charges the platform and creator fees on the WETH leg; PoolManager `Swap` amounts exclude them.
 The per-swap fee breakdown is in:
 ```
@@ -76,7 +82,7 @@ event PoolFees(address indexed token, address indexed trader, uint256 platformFe
 topic0 0x3c416f7bbb3db373893f782e2487d7817574909497fe6d5040cda531fe9224f6   (emitted by BloomFeeHook)
 ```
 
-### Optional: user-level trades across curve and pool, LaunchRouter `0xBA99f5E8391125Cc58D81569FD8d4Cdf2618473D`
+### Optional: user-level trades across curve and pool, LaunchRouter `0x5283A23a0D0872D74Ae448Fb6918e01D1faAbfb8`
 ```
 event RoutedTrade(address indexed token, address indexed trader, address indexed recipient, bool buy, bool viaPool, uint256 quoteAmount, uint256 tokenAmount)
 topic0 0x347404b6df6f555379b63d387b5e15cf4141cad993209437bff1b71f11c27e88

@@ -3,9 +3,10 @@
 //   node scripts/testnet-check.mjs            # phase 1: wiring reads, launch, protection, trades,
 //                                             # limit orders, graduation, pool trades, fees, BLOOM
 //   node scripts/testnet-check.mjs --phase2   # 30+ minutes later: buyback and BLOOM burn (need the TWAP window)
+//   add --v2 to check the BloomLaunch v2 deployment (deployments/<chainId>-v2.json): launch fee, dev buy, V3-style events
 // Reads deployments/<chainId>.json and the throwaway signer from .env.testnet. Never point it at mainnet.
 import fs from 'node:fs';
-import { JsonRpcProvider, NonceManager, Wallet, Contract, ZeroHash, getAddress, hexlify, randomBytes } from 'ethers';
+import { Interface, JsonRpcProvider, NonceManager, Wallet, Contract, ZeroHash, getAddress, hexlify, randomBytes } from 'ethers';
 import { attach } from './deploy-lib.mjs';
 import { mineTokenSalt } from '../sdk/vanity.mjs';
 
@@ -18,15 +19,26 @@ if (chainId === 4663n) throw new Error('refusing to run the wiring check on main
 const wallet = new Wallet(env.DEPLOYER_PRIVATE_KEY, provider);
 const me = new NonceManager(wallet);
 me.address = wallet.address;
-const deployment = JSON.parse(fs.readFileSync(`deployments/${chainId}.json`, 'utf8'));
+const V2 = process.argv.includes('--v2');
+const suffix = V2 ? '-v2' : '';
+const deployment = JSON.parse(fs.readFileSync(`deployments/${chainId}${suffix}.json`, 'utf8'));
 const artifacts = JSON.parse(fs.readFileSync('artifacts/production.json', 'utf8'));
 const c = deployment.contracts, weth = deployment.config.weth;
-const stateFile = `deployments/${chainId}-check.json`;
+const stateFile = `deployments/${chainId}${suffix}-check.json`;
+// Uniswap V3 pool interface, as market-data indexers decode it (v2 curves).
+const V3 = new Interface([
+  'event Initialize(uint160 sqrtPriceX96, int24 tick)',
+  'event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)',
+  'event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool)',
+  'function token0() view returns (address)', 'function token1() view returns (address)', 'function factory() view returns (address)',
+  'function fee() view returns (uint24)', 'function liquidity() view returns (uint128)',
+  'function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool)']);
+const v3Events = (rc, name) => rc.logs.map(l => { try { return { ...V3.parseLog(l), address: l.address }; } catch { return null; } }).filter(e => e?.name === name);
 const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : { results: {} };
 
 const at = (file, name, address) => attach(artifacts, file, name, address, me);
-const factory = at('contracts/LaunchFactory.sol', 'LaunchFactory', c.LaunchFactory);
-const router = at('contracts/LaunchRouter.sol', 'LaunchRouter', c.LaunchRouter);
+const factory = V2 ? at('contracts/v2/LaunchFactoryV2.sol', 'LaunchFactoryV2', c.LaunchFactory) : at('contracts/LaunchFactory.sol', 'LaunchFactory', c.LaunchFactory);
+const router = V2 ? at('contracts/v2/LaunchRouterV2.sol', 'LaunchRouterV2', c.LaunchRouter) : at('contracts/LaunchRouter.sol', 'LaunchRouter', c.LaunchRouter);
 const escrow = at('contracts/FeeEscrow.sol', 'FeeEscrow', c.FeeEscrow);
 const vault = at('contracts/BuybackVestingVault.sol', 'BuybackVestingVault', c.BuybackVestingVault);
 const adapter = at('contracts/v4/CanonicalBuybackAdapter.sol', 'CanonicalBuybackAdapter', c.CanonicalBuybackAdapter);
@@ -35,8 +47,8 @@ const locker = at('contracts/v4/LiquidityLocker.sol', 'LiquidityLocker', c.Liqui
 const hook = at('contracts/v4/BloomFeeHook.sol', 'BloomFeeHook', c.BloomFeeHook);
 const burner = at('contracts/BloomBuybackBurner.sol', 'BloomBuybackBurner', c.BloomBuybackBurner);
 const limits = at('contracts/LimitOrderExecutor.sol', 'LimitOrderExecutor', c.LimitOrderExecutor);
-const migrations = at('contracts/migration/MigrationFactory.sol', 'MigrationFactory', c.MigrationFactory);
-const curveAt = a => at('contracts/BondingCurve.sol', 'BondingCurve', a);
+const migrations = c.MigrationFactory ? at('contracts/migration/MigrationFactory.sol', 'MigrationFactory', c.MigrationFactory) : null;
+const curveAt = a => V2 ? at('contracts/v2/BondingCurveV2.sol', 'BondingCurveV2', a) : at('contracts/BondingCurve.sol', 'BondingCurve', a);
 const tokenAt = a => at('contracts/LaunchToken.sol', 'LaunchToken', a);
 const wethC = new Contract(weth, ['function deposit() payable', 'function approve(address,uint256) returns (bool)',
   'function balanceOf(address) view returns (uint256)'], me);
@@ -82,7 +94,7 @@ if (!process.argv.includes('--phase2')) {
     must(Number(await burner.burnBps()) === 5000, 'burn share 50%');
     must(eq(await router.factory(), c.LaunchFactory) && eq(await router.weth(), weth), 'router wiring');
     must(eq(await limits.router(), c.LaunchRouter), 'limit executor router');
-    must(eq(await migrations.owner(), deployment.config.governor), 'migration factory owner');
+    if (migrations) must(eq(await migrations.owner(), deployment.config.governor), 'migration factory owner');
     must(eq(await factory.platformToken(), deployment.bloom), 'BLOOM registered as platform token');
     return `owner ${await factory.owner()}`;
   });
@@ -98,15 +110,51 @@ if (!process.argv.includes('--phase2')) {
     const [dep, , initHash] = await factory.tokenInitHash(ME, p, configId, quote);
     p.tokenSalt = (await mineTokenSalt(dep, initHash)).salt;
     token = await factory.predictToken(ME, p, configId, quote);
-    const first = 2n * 10n ** 13n;
+    let first = 2n * 10n ** 13n;
     const balBefore = await provider.getBalance(ME);
-    await wait(router.launch(p, configId, quote, first, 0, await deadline(), { value: first, ...GAS }));
+    if (!V2) {
+      await wait(router.launch(p, configId, quote, first, 0, await deadline(), { value: first, ...GAS }));
+      must(token.toLowerCase().endsWith('b00b'), `address ${token}`);
+      state.token = token;
+      return `${token}, cost ${fmt(balBefore - await provider.getBalance(ME))} ETH incl. gas`;
+    }
+    // v2: the launch fee and a minimum first (dev) buy are enforced onchain.
+    const fee = await factory.launchFee(), minBuy = await factory.minInitialBuy();
+    must(fee > 0n && minBuy > 0n, 'launch terms set');
+    if (first < minBuy) first = minBuy;
+    const refused = async (label, args, value) => { let ok = false; try { await router.launch.staticCall(...args, { value }); } catch { ok = true; } must(ok, `${label} was not refused`); };
+    await refused('dev buy below minimum', [p, configId, quote, minBuy - 1n, 0, await deadline()], fee + minBuy - 1n);
+    await refused('launch without the fee', [p, configId, quote, minBuy, 0, await deadline()], minBuy);
+    const escrowBefore = await escrow.balances(weth, await factory.platformRecipient());
+    const rc = await wait(router.launch(p, configId, quote, first, 0, await deadline(), { value: fee + first, ...GAS }));
     must(token.toLowerCase().endsWith('b00b'), `address ${token}`);
-    state.token = token;
-    return `${token}, cost ${fmt(balBefore - await provider.getBalance(ME))} ETH incl. gas`;
+    must((await escrow.balances(weth, await factory.platformRecipient())) - escrowBefore >= fee, 'launch fee reached platform revenue');
+    must(await tokenAt(token).balanceOf(ME) > 0n, 'dev buy received');
+    state.token = token; state.launchTx = rc.hash;
+    return `${token}; fee ${fmt(fee)} + dev buy ${fmt(first)} ETH; refused: tiny dev buy, missing fee`;
   });
   const curve = curveAt((await factory.launches(token)).curve);
   const tok = tokenAt(token);
+
+  if (V2) await check('v2: curve looks like a Uniswap V3 pool (PoolCreated, Initialize, Swap, views)', async () => {
+    const rc = await provider.getTransactionReceipt(state.launchTx);
+    const created = v3Events(rc, 'PoolCreated'), init = v3Events(rc, 'Initialize'), swaps = v3Events(rc, 'Swap');
+    must(created.length === 1 && eq(created[0].args.pool, curve.target), 'PoolCreated names the curve');
+    must(init.length === 1 && eq(init[0].address, curve.target), 'Initialize from the curve');
+    must(swaps.length === 1 && eq(swaps[0].address, curve.target), 'dev buy Swap from the curve');
+    const pool = new Contract(curve.target, V3, provider);
+    const [t0, t1] = BigInt(weth) < BigInt(token) ? [weth, token] : [token, weth];
+    must(eq(await pool.token0(), t0) && eq(await pool.token1(), t1), 'token0/token1 sorted');
+    must(eq(await pool.factory(), c.LaunchFactory), 'factory()');
+    must(Number(await pool.fee()) === (20 + 300) * 100, 'fee() = 0.20% + 3% in hundredths of a bip');
+    const [sqrtP] = await pool.slot0();
+    const q = await curve.quoteReserve(), t = await curve.tokenReserve();
+    const [r0, r1] = eq(t0, weth) ? [q, t] : [t, q];
+    const isqrt = n => { let x = n, y = (x + 1n) / 2n; while (y < x) { x = y; y = (x + n / x) / 2n; } return x; };
+    must(sqrtP === isqrt(r1 * (1n << 192n) / r0), 'slot0 price equals the curve price');
+    must(await pool.liquidity() > 0n, 'liquidity while on the curve');
+    return `token0 ${t0.slice(0, 8)}…, fee ${await pool.fee()}, events PoolCreated + Initialize + Swap`;
+  });
 
   await check('snipe protection: blocks >1% buys for other wallets, creator can end it', async () => {
     const other = Wallet.createRandom().address;
