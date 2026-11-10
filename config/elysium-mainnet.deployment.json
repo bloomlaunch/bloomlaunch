@@ -74,5 +74,15 @@
     }
   },
   "deployedAt": "2026-11-10T12:51:38.411Z",
-  "bridgeIn": "0x4aBeD3d9FeC76ffe1F578dD5CfC6c1e7B42f75ff"
+  "bridgeIn": "0x4aBeD3d9FeC76ffe1F578dD5CfC6c1e7B42f75ff",
+  "cloneLaunches": {
+    "since": "2026-11-10",
+    "block": 4137500,
+    "LaunchDeployer": "0xccC1204E483030177E4A5F2C8c277E900564dd3F",
+    "curveMaster": "0xA1DAA96dc8cB85a87fE3E14Ad7be7de630C4dBb2",
+    "tokenMaster": "0x18c98c9e779B0c5f3eEe1BC2cb67e3651d6A6597",
+    "LaunchFactoryImplementation": "0x4A0B59c204360A2fb60c4488B1668232B5e8cA04",
+    "upgradeTx": "0xa5e415c9eb49366fbaddef2befd177d1c8722a8df13319a7c748e5d65cfa9a27",
+    "previousLaunchDeployer": "0xbA2201d1e24E90d29347B19d92ad249b9CbbBdf1"
+  }
 }

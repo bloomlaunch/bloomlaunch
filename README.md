@@ -11,7 +11,7 @@ wrapper charges a capped 0.1% fee on top of Elysium's official bridge.
 [Website](https://bloomlaunch.fun) · [Developer docs](https://bloomlaunch.fun/docs) · [X](https://x.com/bloomlaunch)
 
 ## Deployed on Elysium mainnet (chain 99901)
-Deployed 10 Nov 2026 (from block 4,007,532). All 23 contracts are source-verified on the
+Deployed 10 Nov 2026 (from block 4,007,532); clone launches since block 4,137,500. All 27 contracts are source-verified on the
 [Elysium explorer](https://elysium.kinetiq.xyz) with the exact build in this repository.
 
 | Contract | Address |
@@ -22,7 +22,10 @@ Deployed 10 Nov 2026 (from block 4,007,532). All 23 contracts are source-verifie
 | BLOOM curve | [`0xE46553b41643A11EbeC747f10CdAc273142f34c8`](https://elysium.kinetiq.xyz/address/0xE46553b41643A11EbeC747f10CdAc273142f34c8?tab=contract) |
 | LiquidityLocker (immutable) | [`0x06B3df832eFDfA3031C1DdC194604f73944D9c4E`](https://elysium.kinetiq.xyz/address/0x06B3df832eFDfA3031C1DdC194604f73944D9c4E?tab=contract) |
 | BloomFeeHook (immutable, Uniswap V4 hook) | [`0x16D96af9204cE43A75369f88A39C6B73305e20cc`](https://elysium.kinetiq.xyz/address/0x16D96af9204cE43A75369f88A39C6B73305e20cc?tab=contract) |
-| LaunchDeployer | [`0xbA2201d1e24E90d29347B19d92ad249b9CbbBdf1`](https://elysium.kinetiq.xyz/address/0xbA2201d1e24E90d29347B19d92ad249b9CbbBdf1?tab=contract) |
+| LaunchDeployerV3 (clone launches, current) | [`0xccC1204E483030177E4A5F2C8c277E900564dd3F`](https://elysium.kinetiq.xyz/address/0xccC1204E483030177E4A5F2C8c277E900564dd3F?tab=contract) |
+| BondingCurveV3 master (immutable) | [`0xA1DAA96dc8cB85a87fE3E14Ad7be7de630C4dBb2`](https://elysium.kinetiq.xyz/address/0xA1DAA96dc8cB85a87fE3E14Ad7be7de630C4dBb2?tab=contract) |
+| LaunchTokenV3 master (immutable) | [`0x18c98c9e779B0c5f3eEe1BC2cb67e3651d6A6597`](https://elysium.kinetiq.xyz/address/0x18c98c9e779B0c5f3eEe1BC2cb67e3651d6A6597?tab=contract) |
+| LaunchDeployer (v2, full contracts; BLOOM and the first coins) | [`0xbA2201d1e24E90d29347B19d92ad249b9CbbBdf1`](https://elysium.kinetiq.xyz/address/0xbA2201d1e24E90d29347B19d92ad249b9CbbBdf1?tab=contract) |
 | FeeEscrow (proxy) | [`0x4e9F243766374C1d2E0c76Ef84E78A450e1Bde8b`](https://elysium.kinetiq.xyz/address/0x4e9F243766374C1d2E0c76Ef84E78A450e1Bde8b?tab=contract) |
 | BuybackVestingVault (proxy) | [`0xCA948CE3d18008203C22643c871B053D9a845729`](https://elysium.kinetiq.xyz/address/0xCA948CE3d18008203C22643c871B053D9a845729?tab=contract) |
 | CanonicalBuybackAdapter (proxy) | [`0xd5bf4b23c74621b28D8e66dB8524Ea702751ECAa`](https://elysium.kinetiq.xyz/address/0xd5bf4b23c74621b28D8e66dB8524Ea702751ECAa?tab=contract) |
@@ -33,7 +36,7 @@ Deployed 10 Nov 2026 (from block 4,007,532). All 23 contracts are source-verifie
 | BridgeIn (HyperEVM → Elysium, on HyperEVM 999) | `0x4aBeD3d9FeC76ffe1F578dD5CfC6c1e7B42f75ff` |
 
 Full record, including every implementation address: [`config/elysium-mainnet.deployment.json`](config/elysium-mainnet.deployment.json).
-Verification inputs (contract names and constructor arguments): [`verification/elysium-mainnet.json`](verification/elysium-mainnet.json).
+Verification inputs (contract names and constructor arguments): [`verification/elysium-mainnet.json`](verification/elysium-mainnet.json) and [`verification/elysium-clones.json`](verification/elysium-clones.json).
 
 ### Upgrades and what can never change
 The factory, router, fee escrow, buyback vault and adapters, BLOOM burner and limit-order executor run behind
@@ -41,6 +44,16 @@ ERC-1967 (UUPS) proxies; only the factory owner can upgrade them ([`contracts/pr
 **Never upgradeable:** every launched token and its bonding curve, the liquidity locker (graduated liquidity stays
 locked forever) and the V4 fee hook (pool fees cannot change). Holders trust the owner not to upgrade the proxied
 contracts maliciously; a timelock or multisig owner is the planned next step.
+
+### Clone launches
+Since block 4,137,500 every new coin is two [EIP-1167](https://eips.ethereum.org/EIPS/eip-1167) clones (token and curve) of fixed
+master contracts ([`contracts/v3/`](contracts/v3)) instead of two full contract deployments: a launch uses about 1.7M gas
+instead of 4.6M. The logic is BondingCurveV2 and LaunchToken unchanged, except that constructor values are written once by
+`setup`/`initialize` in the clone's creation transaction. Masters have no owner or upgrade path and clones point at them by
+fixed address, so launched coins remain immutable. Each clone's CREATE2 address commits to its launch parameters (a 32-byte
+hash appended to the clone), so clients still search `tokenSalt` against `tokenInitHash` for the `b00b` suffix. The factory
+moved to the new deployer in place with `upgradeToAndCall(…, initializeV2(deployer))`; BLOOM and earlier coins are unaffected.
+Rehearse the upgrade on a fork with `npm run rehearse:clones`.
 
 ### Earlier deployment: Robinhood Chain (chain 4663)
 BloomLaunch ran on Robinhood Chain first (v1 and v2, 28–29 Oct 2026). Those contracts stay onchain and keep working
@@ -54,7 +67,8 @@ for their tokens; the code as deployed there is tagged `robinhood-v2`. Records:
 | `contracts/v2/LaunchFactoryV2.sol` | Creates each token and its bonding curve (addresses end in `b00b`), graduation, creator controls, launch terms (owner-set, capped) |
 | `contracts/v2/LaunchRouterV2.sol` | Native-HYPE router across the curve and the Uniswap V4 pool; launch = fee + first buy in one transaction |
 | `contracts/v2/BondingCurveV2.sol` | Per-token curve: buys, sells, snipe protection, graduation, refunds, plus Uniswap V3 pool views and `Initialize`/`Swap` events |
-| `contracts/v2/LaunchDeployerV2.sol` | CREATE2 deployment of token and curve |
+| `contracts/v2/LaunchDeployerV2.sol` | CREATE2 deployment of token and curve (full contracts) |
+| `contracts/v3/` | Clone launches: `LaunchDeployerV3` and the immutable `BondingCurveV3` / `LaunchTokenV3` masters |
 | `contracts/LaunchToken.sol` | Fixed-supply ERC-20 with a claimable holder-reward ledger |
 | `contracts/FeeMath.sol` | 0.10% platform fee, 0–10% creator fee and its split |
 | `contracts/FeeEscrow.sol` | Escrowed creator and platform fees, claimable by beneficiaries only |

@@ -109,6 +109,7 @@ contract LaunchFactoryV2 is Ownable2StepUpgradeable, ReentrancyGuard, CoreUpgrad
     event ProtectionEnded(address indexed token, address indexed caller);
     event PlatformTokenLaunched(address indexed token, address indexed reserveRecipient, uint256 reserveAmount);
     event LaunchTermsChanged(uint256 launchFee, uint256 minInitialBuy);
+    event DeployerChanged(address indexed deployer);
     /// @notice Uniswap V3 factory event (same signature) announcing each curve as a pool.
     event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool);
 
@@ -129,6 +130,16 @@ contract LaunchFactoryV2 is Ownable2StepUpgradeable, ReentrancyGuard, CoreUpgrad
         __Ownable_init(governor);
         __Ownable2Step_init();
         deployer = deployer_;
+    }
+
+    /// @notice Points new launches at another deployer with the same interface (LaunchDeployerV3, which
+    /// clones fixed master contracts). Run once, by the owner, through `upgradeToAndCall`. Tokens and
+    /// curves already launched are untouched; the old deployer simply stops being used.
+    function initializeV2(LaunchDeployer deployer_) external reinitializer(2) {
+        if (msg.sender != owner()) revert Unauthorized();
+        if (address(deployer_).code.length == 0 || deployer_.factory() != address(this)) revert InvalidParameters();
+        deployer = deployer_;
+        emit DeployerChanged(address(deployer_));
     }
 
     function _upgrader() internal view override returns (address) { return owner(); }

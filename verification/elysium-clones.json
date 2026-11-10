@@ -1,0 +1,33 @@
+{
+  "chainId": 99901,
+  "api": "https://elysium.kinetiq.xyz/api/verify",
+  "explorer": "https://elysium.kinetiq.xyz",
+  "input": "artifacts/production-input.json",
+  "compilerVersion": "v0.8.38+commit.1835d247",
+  "contracts": [
+    {
+      "label": "LaunchDeployerV3",
+      "address": "0xccC1204E483030177E4A5F2C8c277E900564dd3F",
+      "contractName": "contracts/v3/LaunchDeployerV3.sol:LaunchDeployerV3",
+      "constructorArguments": "0000000000000000000000008a5439f3c373208531e7b3454941a6ccc66a6081"
+    },
+    {
+      "label": "BondingCurveV3 (master)",
+      "address": "0xA1DAA96dc8cB85a87fE3E14Ad7be7de630C4dBb2",
+      "contractName": "contracts/v3/BondingCurveV3.sol:BondingCurveV3",
+      "constructorArguments": ""
+    },
+    {
+      "label": "LaunchTokenV3 (master)",
+      "address": "0x18c98c9e779B0c5f3eEe1BC2cb67e3651d6A6597",
+      "contractName": "contracts/v3/LaunchTokenV3.sol:LaunchTokenV3",
+      "constructorArguments": ""
+    },
+    {
+      "label": "LaunchFactory implementation v2",
+      "address": "0x4A0B59c204360A2fb60c4488B1668232B5e8cA04",
+      "contractName": "contracts/v2/LaunchFactoryV2.sol:LaunchFactoryV2",
+      "constructorArguments": "0000000000000000000000000f5d9b280fd1b6ef300a1d806e9f45b4c83c97b10000000000000000000000004e9f243766374c1d2e0c76ef84e78a450e1bde8b000000000000000000000000ca948ce3d18008203c22643c871b053d9a845729000000000000000000000000e2e105d3f7209a9da11f83ccf3e7398a753823f100000000000000000000000006b3df832efdfa3031c1ddc194604f73944d9c4e"
+    }
+  ]
+}
