@@ -124,3 +124,27 @@ contract MockBlockable is ERC20 {
 contract MockOldToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) { _mint(msg.sender, 1e30); }
 }
+/// Test-only stand-in for the ArbOS precompile at 0x64 (installed there with setCode).
+contract MockArbSys {
+    address public lastDestination;
+    uint256 public lastValue;
+    uint256 public count;
+    function withdrawEth(address destination) external payable returns (uint256) {
+        lastDestination = destination; lastValue = msg.value; return ++count;
+    }
+}
+/// Test-only burnable bridged token and child gateway router: the router burns from the caller.
+contract MockBridgedToken is ERC20 {
+    constructor() ERC20("Bridged", "BRG") { _mint(msg.sender, 1e30); }
+    function burnFrom(address from, uint256 amount) external { _burn(from, amount); }
+}
+contract MockChildRouter {
+    MockBridgedToken public immutable child;
+    address public lastParent; address public lastTo; uint256 public lastAmount;
+    constructor(MockBridgedToken child_) { child = child_; }
+    function outboundTransfer(address l1Token, address to, uint256 amount, bytes calldata) external payable returns (bytes memory) {
+        child.burnFrom(msg.sender, amount);
+        lastParent = l1Token; lastTo = to; lastAmount = amount;
+        return "";
+    }
+}

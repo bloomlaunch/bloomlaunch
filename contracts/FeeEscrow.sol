@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {CoreUpgradeable} from "./proxy/CoreUpgradeable.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @notice Deposits are credited only when backed by actual received assets.
 /// No owner, rescue function, or administrator can spend beneficiary balances.
-contract FeeEscrow is ReentrancyGuard {
+/// Behind a proxy, the owner of `upgradeAuthority` (the factory) may upgrade it; zero disables upgrades.
+contract FeeEscrow is ReentrancyGuard, CoreUpgradeable {
     using SafeERC20 for IERC20;
+    address public immutable upgradeAuthority;
+    constructor(address upgradeAuthority_) { upgradeAuthority = upgradeAuthority_; }
+    function _upgrader() internal view override returns (address) { return _ownerOf(upgradeAuthority); }
     mapping(address asset => mapping(address beneficiary => uint256)) public balances;
     mapping(address asset => uint256) public liabilities;
     error InvalidRecipient();

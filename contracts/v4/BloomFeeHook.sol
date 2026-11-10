@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
@@ -31,7 +32,7 @@ interface IHookVault {
 
 /// @notice Canonical post-graduation fee hook for BloomLaunch pools. The pool LP
 /// fee is zero; this hook charges exactly the launch's curve economics on the
-/// quote leg: 0.20% platform plus the launch's immutable 0-10% creator rate.
+/// quote leg: 0.10% platform plus the launch's immutable 0-10% creator rate.
 /// Fee base is the gross quote amount, as on the curve: exact-input buys and
 /// exact-input sells charge on the specified/received gross; exact-output trades
 /// charge on the smallest gross whose net covers the pool amount.
@@ -85,7 +86,12 @@ contract BloomFeeHook is IHooks {
     constructor(IPoolManager poolManager_, IHookFactory factory_) {
         poolManager = poolManager_;
         factory = factory_;
-        Hooks.validateHookPermissions(this, permissions());
+    }
+
+    /// @notice Reverts unless this hook's address carries exactly the V4 permission bits it implements.
+    /// The locker calls it when it binds the hook. The hook is never proxied: pool fees cannot change.
+    function validatePermissions() external view {
+        Hooks.validateHookPermissions(IHooks(address(this)), permissions());
     }
 
     function permissions() public pure returns (Hooks.Permissions memory) {

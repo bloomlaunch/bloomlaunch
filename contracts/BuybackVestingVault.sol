@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {CoreUpgradeable} from "./proxy/CoreUpgradeable.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -26,7 +28,7 @@ interface IBuybackAdapter {
 
 /// @notice No owner withdrawals. Quote balances and vesting rights belong to the
 /// beneficiary at funding/execution time, not a future token creator recipient.
-contract BuybackVestingVault is ReentrancyGuard {
+contract BuybackVestingVault is ReentrancyGuard, CoreUpgradeable {
     using SafeERC20 for IERC20;
     uint256 public constant VESTING_DURATION = 5 * 365 days;
     uint256 public constant EXECUTION_COOLDOWN = 60;
@@ -58,6 +60,11 @@ contract BuybackVestingVault is ReentrancyGuard {
         if (bootstrapper_ == address(0) || adapter_.code.length == 0) revert InvalidParameters();
         bootstrapper = bootstrapper_;
         adapter = IBuybackAdapter(adapter_);
+    }
+
+    /// @dev The deployer until the factory is bound, then the factory owner.
+    function _upgrader() internal view override returns (address) {
+        return address(factory) == address(0) ? bootstrapper : _ownerOf(address(factory));
     }
 
     /// @notice Resolves deployment ordering once, permanently. This authority

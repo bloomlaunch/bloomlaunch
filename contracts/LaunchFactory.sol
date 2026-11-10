@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
+import {FeeMath} from "./FeeMath.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -134,7 +135,7 @@ contract LaunchFactory is Ownable2Step, ReentrancyGuard {
 
     function previewEconomics(uint256 id, address quote) public view returns (bytes32) {
         return keccak256(abi.encode(block.chainid, address(this), id, configs[id], quote,
-            quoteAssets[quote], platformRecipient, escrow, buybackVault, poolManager, locker, uint16(20)));
+            quoteAssets[quote], platformRecipient, escrow, buybackVault, poolManager, locker, uint16(FeeMath.PLATFORM_BPS)));
     }
 
     // Nonpayable: the factory cannot collect a native launch fee.

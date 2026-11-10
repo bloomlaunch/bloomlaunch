@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {CoreUpgradeable} from "./proxy/CoreUpgradeable.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -18,7 +20,7 @@ interface ILimitFactory {
 /// the market gives at least `minAmountOut`. Fills are all-or-nothing, go through the
 /// normal router (same fees as any trade) and pay the output straight to the maker.
 /// The filler cannot change amounts, prices or recipients. Makers cancel by nonce.
-contract LimitOrderExecutor is EIP712, ReentrancyGuard {
+contract LimitOrderExecutor is EIP712, ReentrancyGuard, CoreUpgradeable {
     using SafeERC20 for IERC20;
 
     struct Order {
@@ -46,6 +48,8 @@ contract LimitOrderExecutor is EIP712, ReentrancyGuard {
         router = router_;
         factory = ILimitFactory(address(router_.factory()));
     }
+
+    function _upgrader() internal view override returns (address) { return _ownerOf(address(factory)); }
 
     function hashOrder(Order calldata o) public view returns (bytes32) {
         return _hashTypedDataV4(keccak256(abi.encode(ORDER_TYPEHASH, o.maker, o.token, o.buy, o.amountIn,

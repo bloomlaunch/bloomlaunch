@@ -1,0 +1,78 @@
+{
+  "version": 2,
+  "proxied": true,
+  "chainId": 99901,
+  "deployer": "0x44386D1C649933d97D0F586Bbb05C301e5223A78",
+  "contracts": {
+    "ProxyBootstrap": "0x104994FBc703b2Ce5120a025e2D5cA6d664c87b4",
+    "FeeEscrow": "0x4e9F243766374C1d2E0c76Ef84E78A450e1Bde8b",
+    "CanonicalBuybackAdapter": "0xd5bf4b23c74621b28D8e66dB8524Ea702751ECAa",
+    "BuybackVestingVault": "0xCA948CE3d18008203C22643c871B053D9a845729",
+    "BloomBuybackBurner": "0x0f5D9B280fd1B6EF300a1D806E9f45b4c83c97b1",
+    "BloomBurnAdapter": "0x284C6b98fB4c3c8fc870e61C90b3cD40e4878523",
+    "LaunchFactory": "0x8a5439F3c373208531E7B3454941A6cCC66A6081",
+    "LaunchRouter": "0x42ba1aFdaac55Bc4b07CC556A50C114B8f5c1911",
+    "LimitOrderExecutor": "0x55aDeFfe076536c686ea8025EA04ba5fe60932a0",
+    "LiquidityLocker": "0x06B3df832eFDfA3031C1DdC194604f73944D9c4E",
+    "BloomFeeHook": "0x16D96af9204cE43A75369f88A39C6B73305e20cc",
+    "LaunchDeployer": "0xbA2201d1e24E90d29347B19d92ad249b9CbbBdf1",
+    "BridgeOut": "0xA029c406A229374b71CC876D59281711109f01D7"
+  },
+  "implementations": {
+    "FeeEscrow": "0xb4336762646E8F3f483b662B26B02106777C721d",
+    "CanonicalBuybackAdapter": "0xF7C4916F3a08a2EaA5477c7F4A158b0325888D89",
+    "BuybackVestingVault": "0x8027b39392E68739d8316781d14bFc9303634AFE",
+    "BloomBuybackBurner": "0x2dD43dB06FBdBd0fC2CCACCf5cD32bC677cC5e9f",
+    "BloomBurnAdapter": "0xd6444Afe0312F8a82F737AcB9DF139c3c188E80e",
+    "LaunchFactory": "0x330c304c19A3534F06b9F59DE608137deb0077bd",
+    "LaunchRouter": "0xeb3c0a0135Ea7aedd3b28a6C21ce881aB3F5bf6b",
+    "LimitOrderExecutor": "0xC20880eC2Acf22054B70cE6B11DBdb02395bd61a"
+  },
+  "proxyBootstrap": "0x104994FBc703b2Ce5120a025e2D5cA6d664c87b4",
+  "pendingOwner": "0x44386D1C649933d97D0F586Bbb05C301e5223A78",
+  "block": 4015236,
+  "bloom": "0xf2Ef1287314dcc7e8422E917408861714B3FB00B",
+  "teamVesting": null,
+  "hookSalt": "0x00000000000000000000000000000000000000000000000000000000000025f2",
+  "startBlock": 4007532,
+  "config": {
+    "_comment": "Elysium mainnet (chain 99901, HYPE gas). BloomLaunch v2 behind UUPS proxies: 0.10% platform fee, free launch with a minimum first buy (~$0.05 of HYPE), BLOOM relaunched with 20% to the deployer wallet unlocked (no vesting), platform fees 50% BLOOM buy-and-burn / 50% to the fee wallet. Opening market cap ~$3,000 (44 HYPE virtual) and graduation after ~132 HYPE raised, at HYPE ~$73.60 on 10 Nov 2026. Checked onchain 10 Nov 2026: Uniswap V4 PoolManager and WHYPE from Elysium and Uniswap docs.",
+    "chainId": 99901,
+    "poolManager": "0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1",
+    "poolManagerCodeHash": "0xbb5fb2091cfd38e71f56d14a2b6b5e71a22ac2b8e5881faa422ccf92b40df7a1",
+    "weth": "0xbA876237B0F021A6c6D852d6c26E107997cC5E81",
+    "governor": "0x44386D1C649933d97D0F586Bbb05C301e5223A78",
+    "deployer": "0x44386D1C649933d97D0F586Bbb05C301e5223A78",
+    "platformRecipient": "0x8c56f99D5c72D8F6c91EFcC903C61eFFA9e062E4",
+    "bloomBurnBps": 5000,
+    "bloom": {
+      "team": "0x44386D1C649933d97D0F586Bbb05C301e5223A78",
+      "teamBps": 2000,
+      "metadataURI": "bloom-meta:0dac899e640c96fee59064b93bd0584b7050aec583d35b066a822078714b122a"
+    },
+    "extraQuoteAssets": [],
+    "extraLaunchConfigs": [],
+    "launchConfig": {
+      "supply": "1000000000000000000000000000",
+      "reservedTokens": "200000000000000000000000000",
+      "phantomQuote": "44000000000000000000"
+    },
+    "version": 2,
+    "launchFeeWei": "0",
+    "minInitialBuyWei": "680000000000000",
+    "bridge": {
+      "_comment": "BloomLaunch bridge, 0.1% fee to the fee wallet. BridgeOut (Elysium -> HyperEVM) deploys with the system; BridgeIn (HyperEVM -> Elysium) deploys on HyperEVM with npm run deploy:bridge-in.",
+      "feeBps": 10,
+      "feeRecipient": "0x8c56f99D5c72D8F6c91EFcC903C61eFFA9e062E4",
+      "elysiumRouter": "0x61EbbC3A29f1970aF2Ce862bA9c5364832E14d17",
+      "hyperevm": {
+        "chainId": 999,
+        "rpcUrl": "https://rpc.hyperliquid.xyz/evm",
+        "inbox": "0xce59f8B65ad41C9DAE4c07A0571a39824bD92cff",
+        "router": "0x5D24f760DD7664b4214bDD4B04a3f62B9edd68c0"
+      }
+    }
+  },
+  "deployedAt": "2026-11-10T12:51:38.411Z",
+  "bridgeIn": "0x4aBeD3d9FeC76ffe1F578dD5CfC6c1e7B42f75ff"
+}

@@ -130,12 +130,12 @@ test(`invariants hold under random trading (seed ${SEED}, ${STEPS} steps per lau
       assert.ok(await L.tok.excluded(c.LaunchRouter), `router never earns holder rewards ${where}`);
     }
 
-    // Checks one trade's fee split against the onchain formula: platform 0.20%, creator rate, floor-rounded.
+    // Checks one trade's fee split against the onchain formula: platform 0.10%, creator rate, floor-rounded.
     function checkCurveFees(L, rc) {
       for (const log of rc.logs) {
         let ev; try { ev = L.curve.interface.parseLog(log); } catch { continue; }
         if (ev?.name !== 'Trade') continue;
-        assert.equal(ev.args.platformFee, ev.args.grossQuote * 20n / 10_000n, `curve platform fee exact [seed ${SEED}]`);
+        assert.equal(ev.args.platformFee, ev.args.grossQuote * 10n / 10_000n, `curve platform fee exact [seed ${SEED}]`);
         assert.equal(ev.args.creatorFee, ev.args.grossQuote * BigInt(L.creatorBps) / 10_000n, `curve creator fee exact [seed ${SEED}]`);
       }
     }
@@ -146,7 +146,7 @@ test(`invariants hold under random trading (seed ${SEED}, ${STEPS} steps per lau
         if (ev?.name !== 'PoolFees') continue;
         assert.equal(ev.args.holderRewards + ev.args.buybackFunding + ev.args.creatorEarnings, ev.args.creatorFee, `creator fee fully allocated [seed ${SEED}]`);
         // platform = floor(g * 20 / 1e4) and creator = floor(g * bps / 1e4) for one gross g: cross-check the ratio.
-        const lhs = ev.args.platformFee * BigInt(L.creatorBps), rhs = ev.args.creatorFee * 20n;
+        const lhs = ev.args.platformFee * BigInt(L.creatorBps), rhs = ev.args.creatorFee * 10n;
         assert.ok((lhs > rhs ? lhs - rhs : rhs - lhs) <= BigInt(Math.max(L.creatorBps, 20)), `pool fee rates consistent [seed ${SEED}]`);
       }
     }
@@ -266,7 +266,7 @@ test(`fee maths: exact fees, full allocation and minimal gross-for-net on random
       const net = r.next() < 0.3 ? BigInt(r.int(1000)) : r.amount(1n, 10n ** 30n);
       const gross = await h.grossForNet(net, rate);
       const [p1, c1, n1] = await h.fees(gross, rate);
-      assert.equal(p1, gross * 20n / 10_000n, 'platform fee is floor(0.20%)');
+      assert.equal(p1, gross * 10n / 10_000n, 'platform fee is floor(0.10%)');
       assert.equal(c1, gross * rate / 10_000n, 'creator fee is floor(rate)');
       assert.equal(p1 + c1 + n1, gross, 'fees and net add up to gross');
       assert.ok(n1 >= net, `gross ${gross} covers net ${net} at ${rate}`);

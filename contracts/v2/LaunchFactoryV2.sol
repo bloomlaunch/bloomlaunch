@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
-import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {BondingCurveV2 as BondingCurve} from "./BondingCurveV2.sol";
 import {LaunchToken} from "../LaunchToken.sol";
 import {LaunchDeployerV2 as LaunchDeployer} from "./LaunchDeployerV2.sol";
+import {FeeMath} from "../FeeMath.sol";
+import {CoreUpgradeable} from "../proxy/CoreUpgradeable.sol";
 
 interface IGraduationExecutor {
     function execute(address token, address quote, uint256 tokens, uint256 quoteAmount) external returns (bytes32 poolId);
@@ -19,7 +20,8 @@ interface IGraduationExecutor {
 /// charges a launch fee and makes a mandatory first (dev) buy; the governor sets both in ETH within
 /// hard caps; every launch emits a Uniswap V3-style PoolCreated event for its curve. The governor
 /// launches the platform token (BLOOM) once, directly, with its capped team reserve.
-contract LaunchFactoryV2 is Ownable2Step, ReentrancyGuard {
+/// Runs behind an ERC-1967 proxy: the owner may upgrade it. Launched tokens and curves are not proxied.
+contract LaunchFactoryV2 is Ownable2StepUpgradeable, ReentrancyGuard, CoreUpgradeable {
     struct QuoteAsset { bool approved; uint8 decimals; }
     struct Config {
         uint128 supply;
@@ -68,7 +70,8 @@ contract LaunchFactoryV2 is Ownable2Step, ReentrancyGuard {
     address public immutable escrow;
     address public immutable poolManager;
     address public immutable locker;
-    LaunchDeployer public immutable deployer;
+    /// @notice Bound to this factory's proxy address; set once by `initialize`.
+    LaunchDeployer public deployer;
     mapping(address => QuoteAsset) public quoteAssets;
     Config[] public configs;
     mapping(address => Launch) public launches;
@@ -77,8 +80,8 @@ contract LaunchFactoryV2 is Ownable2Step, ReentrancyGuard {
     address public router;
     /// @notice The platform token (BLOOM), the only launch allowed a team reserve.
     address public platformToken;
-    /// @notice Maximum team reserve of the platform token: 10% of total supply.
-    uint256 public constant MAX_RESERVE_BPS = 1_000;
+    /// @notice Maximum team reserve of the platform token: 20% of total supply.
+    uint256 public constant MAX_RESERVE_BPS = 2_000;   // platform token team share, at most 20% of supply
     /// @notice Launch fee in wei of the quote asset (WETH), paid through the router. Set by the governor.
     uint256 public launchFee;
     /// @notice Smallest first (dev) buy in wei every launch must make. Set by the governor.
@@ -109,15 +112,26 @@ contract LaunchFactoryV2 is Ownable2Step, ReentrancyGuard {
     /// @notice Uniswap V3 factory event (same signature) announcing each curve as a pool.
     event PoolCreated(address indexed token0, address indexed token1, uint24 indexed fee, int24 tickSpacing, address pool);
 
-    constructor(address governor, address platform, address escrow_, address buyback,
-        address poolManager_, address locker_) Ownable(governor)
-    {
+    /// @dev Fixed addresses (proxies and external contracts) are immutables of the implementation;
+    /// state lives in the proxy and is set by `initialize`.
+    constructor(address platform, address escrow_, address buyback, address poolManager_, address locker_) {
         if (platform == address(0) || escrow_ == address(0) || buyback == address(0)
             || poolManager_ == address(0) || locker_ == address(0)) revert InvalidParameters();
         platformRecipient = platform; escrow = escrow_; buybackVault = buyback;
         poolManager = poolManager_; locker = locker_;
-        deployer = new LaunchDeployer(address(this));
+        _disableInitializers();
     }
+
+    /// @param deployer_ A LaunchDeployer bound to this proxy, deployed separately so its code is not part
+    /// of the factory's (the factory would exceed the 24 KB contract size limit).
+    function initialize(address governor, LaunchDeployer deployer_) external initializer {
+        if (address(deployer_).code.length == 0 || deployer_.factory() != address(this)) revert InvalidParameters();
+        __Ownable_init(governor);
+        __Ownable2Step_init();
+        deployer = deployer_;
+    }
+
+    function _upgrader() internal view override returns (address) { return owner(); }
 
     function configureQuote(address asset, bool approved) external onlyOwner {
         if (asset.code.length == 0) revert InvalidParameters();
@@ -150,7 +164,7 @@ contract LaunchFactoryV2 is Ownable2Step, ReentrancyGuard {
 
     function previewEconomics(uint256 id, address quote) public view returns (bytes32) {
         return keccak256(abi.encode(block.chainid, address(this), id, configs[id], quote,
-            quoteAssets[quote], platformRecipient, escrow, buybackVault, poolManager, locker, uint16(20)));
+            quoteAssets[quote], platformRecipient, escrow, buybackVault, poolManager, locker, uint16(FeeMath.PLATFORM_BPS)));
     }
 
     /// @notice Sets the launch fee and minimum first buy (wei of WETH), each capped in code.
@@ -161,13 +175,13 @@ contract LaunchFactoryV2 is Ownable2Step, ReentrancyGuard {
         emit LaunchTermsChanged(fee_, minInitialBuy_);
     }
 
-    /// @notice Launches the platform token once, with at most 10% of total supply minted to
-    /// `reserveRecipient` (a vesting contract). The rest trades on the curve like any launch.
+    /// @notice Launches the platform token once, with at most 20% of total supply minted to
+    /// `reserveRecipient` (a wallet or a vesting contract). The rest trades on the curve like any launch.
     function launchPlatformToken(Params calldata p, uint256 id, address quote, address reserveRecipient, uint256 reserveAmount)
         external onlyOwner nonReentrant returns (address tokenAddress)
     {
         Config memory c = configs[id];
-        if (platformToken != address(0) || reserveRecipient.code.length == 0 || reserveAmount == 0
+        if (platformToken != address(0) || reserveRecipient == address(0) || reserveAmount == 0
             || reserveAmount * 10_000 > (uint256(c.supply) + reserveAmount) * MAX_RESERVE_BPS) revert InvalidParameters();
         tokenAddress = _launch(msg.sender, p, id, quote, reserveRecipient, reserveAmount);
         platformToken = tokenAddress;

@@ -25,7 +25,7 @@ const tx = async promise => (await promise).wait();
 
 async function factoryFixture(s, creatorBps = 1000, holderShareBps = 5000, buybackShareBps = 2500, realBuyback = false, launchProtection = false, protectionExempt = []) {
   const quote = await s.deploy('test/Fixtures.sol', 'MockQuote');
-  const escrow = await s.deploy('contracts/FeeEscrow.sol', 'FeeEscrow');
+  const escrow = await s.deploy('contracts/FeeEscrow.sol', 'FeeEscrow', ['0x0000000000000000000000000000000000000000']);
   const adapter = realBuyback ? await s.deploy('test/Fixtures.sol', 'MockBuybackAdapter') : null;
   const buyback = realBuyback
     ? await s.deploy('contracts/BuybackVestingVault.sol', 'BuybackVestingVault', [s.addresses[0], await adapter.getAddress()])
@@ -89,7 +89,7 @@ test('buyback vault authenticates funding and redirects disabled allocations wit
     await tx(f.curve.connect(s.wallets[2]).buy(10n**17n, 0, s.addresses[2], f.deadline));
     assert.equal(await f.buyback.pending(f.token, s.addresses[1]), initial);
     assert.equal(await f.escrow.balances(f.quote, s.addresses[1])-creatorBefore, 5n*10n**15n);
-    assert.equal(await f.escrow.balances(f.quote, s.addresses[3])-platformBefore, 2n*10n**14n);
+    assert.equal(await f.escrow.balances(f.quote, s.addresses[3])-platformBefore, 10n**14n);
     const before = await f.quote.balanceOf(s.addresses[1]);
     await tx(f.buyback.connect(s.wallets[1]).withdrawPending(f.token, s.addresses[1]));
     assert.equal(await f.quote.balanceOf(s.addresses[1])-before, initial);
@@ -214,10 +214,10 @@ test('opening protection caps each wallet, exempts the creator and can be ended 
     assert.equal(await f.curve.protectionAllowance(s.addresses[1]), 2n**256n - 1n, 'creator payout wallet is exempt');
     await tx(f.curve.connect(s.wallets[2]).buy(2n*10n**17n, 0, s.addresses[1], f.deadline));
     assert.ok(await f.token.balanceOf(s.addresses[1]) > cap);
-    // No extra fee: platform still receives exactly 0.20%.
+    // No extra fee: platform still receives exactly 0.10%.
     const before = await f.escrow.balances(f.quote, s.addresses[3]);
     await tx(f.curve.connect(s.wallets[2]).buy(10n**15n, 0, s.addresses[2], f.deadline));
-    assert.equal(await f.escrow.balances(f.quote, s.addresses[3]) - before, 10n**15n * 20n / 10_000n);
+    assert.equal(await f.escrow.balances(f.quote, s.addresses[3]) - before, 10n**15n * 10n / 10_000n);
     await assert.rejects(f.factory.connect(s.wallets[2]).endProtection(f.token), 'only the creator can end protection');
     await tx(f.factory.connect(s.wallets[1]).endProtection(f.token));
     assert.equal(await f.curve.protectionActive(), false);
@@ -281,7 +281,7 @@ test('curve buys and sells match quotes, split fees and keep donations out of re
     await tx(f.curve.connect(s.wallets[2]).buy(gross, q.tokensOut, s.addresses[2], f.deadline));
     assert.equal(await f.token.balanceOf(s.addresses[2]), q.tokensOut);
     assert.equal(await f.quote.balanceOf(f.curve), q.net);
-    assert.equal(await f.escrow.balances(f.quote, s.addresses[3]), gross*20n/10000n);
+    assert.equal(await f.escrow.balances(f.quote, s.addresses[3]), gross*10n/10000n);
     const creatorFee = gross/10n;
     assert.equal(await f.escrow.balances(f.quote, s.addresses[1]), creatorFee/4n);
     assert.equal(await f.buyback.balances(f.token, s.addresses[1]), creatorFee/4n);
@@ -307,11 +307,11 @@ test('curve buys and sells match quotes, split fees and keep donations out of re
     const required = (numerator+divisor-1n)/divisor;
     assert.ok(final.net >= required);
     const oneLess = final.grossUsed-1n;
-    assert.ok(oneLess-oneLess*20n/10000n-oneLess*1000n/10000n < required,
+    assert.ok(oneLess-oneLess*10n/10000n-oneLess*1000n/10000n < required,
       'final buy charged more than minimum gross required');
     const platformBefore = await f.escrow.balances(f.quote, s.addresses[3]);
     await tx(f.curve.connect(s.wallets[2]).buy(90n*10n**18n, final.tokensOut, s.addresses[2], f.deadline));
-    assert.equal(await f.escrow.balances(f.quote, s.addresses[3])-platformBefore, final.grossUsed*20n/10000n);
+    assert.equal(await f.escrow.balances(f.quote, s.addresses[3])-platformBefore, final.grossUsed*10n/10000n);
     assert.equal(await f.quote.balanceOf(f.curve), await f.curve.realQuoteReserve()+777n);
   } finally { await s.chain.disconnect(); }
 });
@@ -405,7 +405,7 @@ test('fee and allocation arithmetic conserves every unit, including maximum uint
     for (const gross of [0n, 1n, 99n, 10_000n, 10n ** 24n, MaxUint256]) {
       for (const rate of [0n, 1n, 300n, 1000n]) {
         const [platform, creator, net] = await harness.fees(gross, rate);
-        assert.equal(platform, gross * 20n / 10_000n);
+        assert.equal(platform, gross * 10n / 10_000n);
         assert.equal(creator, gross * rate / 10_000n);
         assert.equal(platform + creator + net, gross);
         const [earnings, holders, buyback] = await harness.allocate(creator, 3333, 6667);
@@ -420,7 +420,7 @@ test('fee and allocation arithmetic conserves every unit, including maximum uint
 test('native escrow claims isolate beneficiaries and preserve credit when recipient rejects', async () => {
   const s = await setup();
   try {
-    const escrow = await s.deploy('contracts/FeeEscrow.sol', 'FeeEscrow');
+    const escrow = await s.deploy('contracts/FeeEscrow.sol', 'FeeEscrow', ['0x0000000000000000000000000000000000000000']);
     const rejecting = await s.deploy('test/Fixtures.sol', 'RejectNative');
     await tx(escrow.depositNative(s.addresses[1], { value: 1000n }));
     await tx(escrow.depositNative(await rejecting.getAddress(), { value: 700n }));
@@ -438,7 +438,7 @@ test('native escrow claims isolate beneficiaries and preserve credit when recipi
 test('ERC20 escrow credits actual deposits and rejects taxed assets atomically', async () => {
   const s = await setup();
   try {
-    const escrow = await s.deploy('contracts/FeeEscrow.sol', 'FeeEscrow');
+    const escrow = await s.deploy('contracts/FeeEscrow.sol', 'FeeEscrow', ['0x0000000000000000000000000000000000000000']);
     const quote = await s.deploy('test/Fixtures.sol', 'MockQuote');
     const taxed = await s.deploy('test/Fixtures.sol', 'TaxedQuote');
     await tx(quote.approve(escrow, 12345));

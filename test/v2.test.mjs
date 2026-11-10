@@ -48,12 +48,42 @@ test('v2: own BLOOM, launch fee + mandatory dev buy, Uniswap V3-style pool inter
     const v2 = await deploySystemV2({ signer: w[0], artifacts: output.contracts, config, launchFee: FEE, minInitialBuy: MIN_BUY });
     const c = v2.contracts;
     const { bloom, vesting } = await launchBloom({ signer: w[0], artifacts: output.contracts, contracts: c, weth: config.weth, team: a[3], mineTokenSalt, v2: true });
+    assert.equal(vesting, null, 'v2 BLOOM: no vesting contract');
     const at = (file, name, address, signer = w[0]) => attach(output.contracts, file, name, address, signer);
     const burner = at('contracts/BloomBuybackBurner.sol', 'BloomBuybackBurner', c.BloomBuybackBurner);
     assert.equal(await burner.bloom(), bloom);
     assert.ok(bloom.toLowerCase().endsWith('b00b'));
     const bloomToken = at('contracts/LaunchToken.sol', 'LaunchToken', bloom);
-    assert.equal(await bloomToken.balanceOf(vesting), 10n ** 26n, 'v2 BLOOM: 100M team reserve in vesting');
+    assert.equal(await bloomToken.balanceOf(a[3]), 2n * 10n ** 26n, 'v2 BLOOM: 20% (200M) to the team wallet, unlocked');
+    assert.equal(await bloomToken.totalSupply(), 10n ** 27n);
+
+    // Upgradeable core: every proxy's upgrader is the factory owner; strangers cannot upgrade;
+    // the factory cannot be initialized again; an upgrade keeps state.
+    const CORE = ['FeeEscrow', 'CanonicalBuybackAdapter', 'BuybackVestingVault', 'BloomBuybackBurner',
+      'BloomBurnAdapter', 'LaunchFactory', 'LaunchRouter', 'LimitOrderExecutor'];
+    // Never upgradeable: the locker (graduated liquidity) and the hook (pool fees) have no proxy and no upgrade function.
+    for (const label of ['LiquidityLocker', 'BloomFeeHook']) {
+      assert.equal(BigInt(await provider.getStorage(c[label], '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc')), 0n, `${label} is not a proxy`);
+      assert.equal(v2.implementations[label], undefined);
+    }
+    const upgradeAbi = ['function upgrader() view returns (address)', 'function upgradeToAndCall(address,bytes) payable',
+      'function proxiableUUID() view returns (bytes32)'];
+    const IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
+    for (const label of CORE) {
+      const p = new Contract(c[label], upgradeAbi, w[0]);
+      assert.equal(await p.upgrader(), a[0], `${label} upgrader is the factory owner`);
+      const slot = await provider.getStorage(c[label], IMPL_SLOT);
+      assert.equal(BigInt(slot), BigInt(v2.implementations[label]), `${label} proxy points at its implementation`);
+      await assert.rejects(p.connect(w[5]).upgradeToAndCall(v2.implementations[label], '0x'), `${label}: strangers cannot upgrade`);
+    }
+    await assert.rejects(at('contracts/v2/LaunchFactoryV2.sol', 'LaunchFactoryV2', c.LaunchFactory).initialize(a[5], c.LaunchDeployer), 'factory initializes once');
+    await assert.rejects(at('contracts/v2/LaunchFactoryV2.sol', 'LaunchFactoryV2', v2.implementations.LaunchFactory).initialize(a[5], c.LaunchDeployer),
+      'the implementation itself can never be initialized');
+    await at('contracts/v4/BloomFeeHook.sol', 'BloomFeeHook', c.BloomFeeHook).validatePermissions();
+    const routerImpl2 = await deployArt('contracts/v2/LaunchRouterV2.sol', 'LaunchRouterV2', [c.LaunchFactory, config.poolManager, config.weth]);
+    await (await new Contract(c.LaunchRouter, upgradeAbi, w[0]).upgradeToAndCall(await routerImpl2.getAddress(), '0x')).wait();
+    assert.equal(BigInt(await provider.getStorage(c.LaunchRouter, IMPL_SLOT)), BigInt(await routerImpl2.getAddress()), 'owner upgrade works');
+    assert.equal(await at('contracts/v2/LaunchFactoryV2.sol', 'LaunchFactoryV2', c.LaunchFactory).router(), c.LaunchRouter, 'state kept across the upgrade');
     assert.equal(c.MigrationFactory, undefined, 'no v1 migration factory on v2');
     const factory = at('contracts/v2/LaunchFactoryV2.sol', 'LaunchFactoryV2', c.LaunchFactory);
     const router = at('contracts/v2/LaunchRouterV2.sol', 'LaunchRouterV2', c.LaunchRouter, w[1]);
@@ -94,7 +124,7 @@ test('v2: own BLOOM, launch fee + mandatory dev buy, Uniswap V3-style pool inter
     const [t0, t1] = BigInt(config.weth) < BigInt(token) ? [config.weth, token] : [token, config.weth];
     assert.equal(created[0].args.token0, t0); assert.equal(created[0].args.token1, t1);
     assert.equal(created[0].args.pool, curveAddr);
-    assert.equal(created[0].args.fee, 12000n, '0.20% + 1% in hundredths of a bip');
+    assert.equal(created[0].args.fee, 11000n, '0.10% + 1% in hundredths of a bip');
     assert.equal(events(rc, 'Initialize').length, 1);
 
     // The curve answers the V3 pool views, consistent with its reserves.
@@ -102,7 +132,7 @@ test('v2: own BLOOM, launch fee + mandatory dev buy, Uniswap V3-style pool inter
     const curve = at('contracts/v2/BondingCurveV2.sol', 'BondingCurveV2', curveAddr);
     assert.equal(await pool.token0(), t0); assert.equal(await pool.token1(), t1);
     assert.equal(await pool.factory(), c.LaunchFactory);
-    assert.equal(await pool.fee(), 12000n);
+    assert.equal(await pool.fee(), 11000n, "0.10% platform + 1% creator, in hundredths of a bip");
     const checkPrice = async (sqrtP, tick, label) => {
       const q = await curve.quoteReserve(), t = await curve.tokenReserve();
       const [r0, r1] = t0 === config.weth ? [q, t] : [t, q];

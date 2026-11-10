@@ -5,7 +5,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 library FeeMath {
     uint256 internal constant BPS = 10_000;
-    uint256 internal constant PLATFORM_BPS = 20;
+    uint256 internal constant PLATFORM_BPS = 10;   // 0.10% (Elysium); 0.20% on the Robinhood deployments
     uint256 internal constant MAX_CREATOR_BPS = 1_000;
     error InvalidFee();
     error InvalidAllocation();
@@ -24,7 +24,7 @@ library FeeMath {
         if (creatorBps > MAX_CREATOR_BPS) revert InvalidFee();
         gross = Math.mulDiv(net, BPS, BPS - PLATFORM_BPS - creatorBps, Math.Rounding.Ceil);
         // Separate floor-rounded fees make the conservative inversion at most
-        // three quote units too large (combined rate is bounded at 10.20%).
+        // three quote units too large (combined rate is bounded at 10.10%).
         while (gross > 0) {
             (,, uint256 previousNet) = fees(gross - 1, creatorBps);
             if (previousNet < net) break;

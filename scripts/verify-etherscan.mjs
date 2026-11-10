@@ -1,14 +1,16 @@
 // Publishes contract source on Etherscan (robin.etherscan.io) through the v2 API, one contract at a
 // time, using a record of addresses, contract names and ABI-encoded constructor arguments.
 // Usage: ETHERSCAN_API_KEY=... node scripts/verify-etherscan.mjs [verification/robinhood-mainnet.json]
+//        node scripts/verify-etherscan.mjs verification/elysium-mainnet.json   (Elysium's Blockscout API, no key)
 // Constructor arguments in the record were re-encoded from the deployment and matched onchain.
 import fs from 'node:fs';
 
 const record = JSON.parse(fs.readFileSync(process.argv[2] ?? 'verification/robinhood-mainnet.json', 'utf8'));
-const key = process.env.ETHERSCAN_API_KEY;
+// Blockscout-style explorers (record.api, e.g. Elysium's) take the same API and need no key.
+const key = process.env.ETHERSCAN_API_KEY ?? (record.api ? 'blockscout' : null);
 if (!key) throw new Error('ETHERSCAN_API_KEY is required');
 const source = fs.readFileSync(record.input, 'utf8');
-const API = `https://api.etherscan.io/v2/api?chainid=${record.chainId}`;
+const API = record.api ?? `https://api.etherscan.io/v2/api?chainid=${record.chainId}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function post(params) {
   for (let attempt = 1; ; attempt++) {
@@ -36,5 +38,5 @@ for (const c of record.contracts) {
   console.log(`${ok ? 'ok    ' : 'FAILED'} ${c.label.padEnd(28)} ${c.address}  ${result}`);
   await sleep(600);
 }
-console.log(failed ? `\n${failed} contract(s) not verified` : `\nAll ${record.contracts.length} contracts verified on Etherscan.`);
+console.log(failed ? `\n${failed} contract(s) not verified` : `\nAll ${record.contracts.length} contracts verified on ${record.explorer ?? 'Etherscan'}.`);
 process.exit(failed ? 1 : 0);

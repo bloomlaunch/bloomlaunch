@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {CoreUpgradeable} from "../proxy/CoreUpgradeable.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -28,7 +30,7 @@ interface IRouterHook { function poolKey(address token) external view returns (P
 /// transaction. The router holds no balances between transactions.
 /// @notice v2 router. As v1, and launches charge the factory's launch fee (to platform revenue in the
 /// fee escrow) and must include a first (dev) buy of at least the factory's minimum, in one transaction.
-contract LaunchRouterV2 is IUnlockCallback, ReentrancyGuard {
+contract LaunchRouterV2 is IUnlockCallback, ReentrancyGuard, CoreUpgradeable {
     using SafeERC20 for IERC20;
 
     LaunchFactory public immutable factory;
@@ -50,6 +52,8 @@ contract LaunchRouterV2 is IUnlockCallback, ReentrancyGuard {
         poolManager = poolManager_;
         weth = weth_;
     }
+
+    function _upgrader() internal view override returns (address) { return _ownerOf(address(factory)); }
 
     receive() external payable {
         if (msg.sender != address(weth)) revert Unauthorized();

@@ -16,7 +16,7 @@ const DEADLINE = 2n ** 64n;
 const artifact = (file, name) => output.contracts[file]?.[name] ?? output.v4core[file][name];
 const tx = async promise => (await promise).wait();
 const fees = (gross, creatorBps) => {
-  const platform = gross * 20n / 10_000n, creator = gross * BigInt(creatorBps) / 10_000n;
+  const platform = gross * 10n / 10_000n, creator = gross * BigInt(creatorBps) / 10_000n;
   return { platform, creator, net: gross - platform - creator };
 };
 const allocate = (creatorFee, holderBps, buybackBps) => {
@@ -55,7 +55,7 @@ async function system(s) {
   const [gov, , , platform] = s.addresses;
   const poolManager = await s.deploy('@uniswap/v4-core/src/PoolManager.sol', 'PoolManager', [gov]);
   const weth = await s.deploy('test/Fixtures.sol', 'MockWETH');
-  const escrow = await s.deploy('contracts/FeeEscrow.sol', 'FeeEscrow');
+  const escrow = await s.deploy('contracts/FeeEscrow.sol', 'FeeEscrow', ['0x0000000000000000000000000000000000000000']);
   const adapter = await s.deploy('contracts/v4/CanonicalBuybackAdapter.sol', 'CanonicalBuybackAdapter', [poolManager, gov]);
   const vault = await s.deploy('contracts/BuybackVestingVault.sol', 'BuybackVestingVault', [gov, adapter]);
   const locker = await s.deploy('contracts/v4/LiquidityLocker.sol', 'LiquidityLocker', [poolManager, gov]);
@@ -178,7 +178,7 @@ for (const tokenFirst of [true, false]) {
     } finally { await s.chain.disconnect(); }
   });
 
-  test(`v4 hook charges exactly 0.20% platform plus the creator rate on every trade type (token is currency${tokenFirst ? 0 : 1})`, async () => {
+  test(`v4 hook charges exactly 0.10% platform plus the creator rate on every trade type (token is currency${tokenFirst ? 0 : 1})`, async () => {
     const s = await setup();
     try {
       const sys = await system(s);
@@ -210,7 +210,7 @@ for (const tokenFirst of [true, false]) {
       let before = await snapshot();
       let receipt = await tx(sys.router.connect(trader).buy(l.token, E18, 1, s.addresses[4], DEADLINE));
       await check(before, E18, 'exact-input buy');
-      assert.equal(parse(receipt).platformFee, E18 * 20n / 10_000n);
+      assert.equal(parse(receipt).platformFee, E18 * 10n / 10_000n);
       assert.equal(before.pmQuote + fees(E18, creatorBps).net, await sys.weth.balanceOf(sys.poolManager),
         'only the post-fee net enters the pool');
 
@@ -333,8 +333,8 @@ test('v4 canonical buyback uses the TWAP, refuses displaced prices and never fun
     const [executed] = events(sys.vault, receipt, 'BuybackExecuted');
     assert.ok(executed.args.tokensBought > 0n);
     assert.equal(await sys.vault.pending(l.token, s.addresses[1]), funded - amount, 'the buyback trade funds no further buyback');
-    assert.equal(await sys.escrow.balances(sys.weth, s.addresses[3]) - platformBefore, amount * 20n / 10_000n,
-      'platform still earns exactly 0.20% on the buyback trade');
+    assert.equal(await sys.escrow.balances(sys.weth, s.addresses[3]) - platformBefore, amount * 10n / 10_000n,
+      'platform still earns exactly 0.10% on the buyback trade');
     assert.equal(await sys.vault.lotCount(l.token, s.addresses[1]), 1n);
     await assert.rejects(sys.adapter.swap(l.token, sys.weth, 1, 0, s.addresses[0], DEADLINE), 'only the vault can swap');
   } finally { await s.chain.disconnect(); }
@@ -358,7 +358,7 @@ test('v4 router and factory reject unauthorized launches and the locker rejects 
     await graduate(s, sys, free);
     const before = await sys.escrow.balances(sys.weth, s.addresses[3]);
     await tx(sys.router.connect(s.wallets[4]).buy(free.token, E18, 1, s.addresses[4], DEADLINE, { value: E18 }));
-    assert.equal(await sys.escrow.balances(sys.weth, s.addresses[3]) - before, E18 * 20n / 10_000n);
+    assert.equal(await sys.escrow.balances(sys.weth, s.addresses[3]) - before, E18 * 10n / 10_000n);
     assert.equal(await sys.escrow.balances(sys.weth, s.addresses[1]), 0n);
   } finally { await s.chain.disconnect(); }
 });
@@ -396,7 +396,7 @@ test('v4 full lifecycle with a 6-decimal stablecoin quote: curve, graduation, lo
     assert.equal(await sys.locker.isLocked(locked.args.poolId), true);
     const platformBefore = await sys.escrow.balances(usdc, s.addresses[3]);
     await tx(sys.router.connect(trader).buy(token, 1_000n * U, 1, s.addresses[2], DEADLINE));
-    assert.equal(await sys.escrow.balances(usdc, s.addresses[3]) - platformBefore, 2n * U, 'exactly 0.20% of 1,000 USDC');
+    assert.equal(await sys.escrow.balances(usdc, s.addresses[3]) - platformBefore, U, 'exactly 0.10% of 1,000 USDC');
     const sellBefore = await usdc.balanceOf(s.addresses[2]);
     await tx(sys.router.connect(trader).sell(token, 10n**24n, 1, s.addresses[2], DEADLINE, false));
     assert.ok(await usdc.balanceOf(s.addresses[2]) > sellBefore);
@@ -432,7 +432,7 @@ test('v4 limit orders: signed off-chain, filled by anyone at or better than the 
     const platformBefore = await sys.escrow.balances(sys.weth, s.addresses[3]);
     await tx(executor.connect(keeper).fill(order, sig));
     assert.ok(await l.token.balanceOf(makerAddr) - before >= order.minAmountOut);
-    assert.equal(await sys.escrow.balances(sys.weth, s.addresses[3]) - platformBefore, E18 * 20n / 10_000n, 'normal platform fee');
+    assert.equal(await sys.escrow.balances(sys.weth, s.addresses[3]) - platformBefore, E18 * 10n / 10_000n, 'normal platform fee');
     await assert.rejects(executor.connect(keeper).fill(order, sig), 'no replay');
     // Tampering with the order invalidates the signature.
     await assert.rejects(executor.connect(keeper).fill({ ...order, nonce: 3n, minAmountOut: 1n }, sig));

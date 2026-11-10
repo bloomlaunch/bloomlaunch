@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {CoreUpgradeable} from "./proxy/CoreUpgradeable.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -24,7 +26,7 @@ interface IBurnAdapter {
 /// Users' trading fees are unchanged: this only directs the platform's own share.
 /// Buybacks use the canonical adapter's TWAP limits (no execution while the
 /// price is displaced, size capped by liquidity, minimum output enforced).
-contract BloomBuybackBurner is ReentrancyGuard {
+contract BloomBuybackBurner is ReentrancyGuard, CoreUpgradeable {
     using SafeERC20 for IERC20;
 
     address public constant BURN = 0x000000000000000000000000000000000000dEaD;
@@ -58,6 +60,11 @@ contract BloomBuybackBurner is ReentrancyGuard {
         burnAsset = burnAsset_;
         burnBps = burnBps_;
         bootstrapper = bootstrapper_;
+    }
+
+    /// @dev The deployer until bound, then the factory owner.
+    function _upgrader() internal view override returns (address) {
+        return address(factory) == address(0) ? bootstrapper : _ownerOf(address(factory));
     }
 
     /// @notice One-time binding after BLOOM is launched on the factory. Cannot be changed.

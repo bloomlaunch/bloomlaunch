@@ -259,7 +259,7 @@ contract BondingCurveV2 is ReentrancyGuard {
     function token0() public view returns (address) { return _quoteIs0() ? settings.quote : address(token); }
     function token1() public view returns (address) { return _quoteIs0() ? address(token) : settings.quote; }
     function factory() external view returns (address) { return settings.factory; }
-    /// @notice Total trading fee in hundredths of a basis point (0.20% platform + creator fee).
+    /// @notice Total trading fee in hundredths of a basis point (0.10% platform + creator fee).
     function fee() external view returns (uint24) { return uint24((FeeMath.PLATFORM_BPS + settings.creatorBps) * 100); }
     function tickSpacing() external pure returns (int24) { return 1; }
     /// @notice Virtual constant-product liquidity while trading on the curve; zero once it is no longer

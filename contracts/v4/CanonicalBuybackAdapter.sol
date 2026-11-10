@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {CoreUpgradeable} from "../proxy/CoreUpgradeable.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -36,7 +38,7 @@ interface IAdapterVault {
 /// fraction of active quote liquidity, and requires a minimum output. Trades
 /// it makes are recognized by the fee hook, which redirects their buyback share
 /// to creator earnings so execution never funds another buyback.
-contract CanonicalBuybackAdapter is IUnlockCallback {
+contract CanonicalBuybackAdapter is IUnlockCallback, CoreUpgradeable {
     using SafeERC20 for IERC20;
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
@@ -60,6 +62,11 @@ contract CanonicalBuybackAdapter is IUnlockCallback {
         if (address(poolManager_).code.length == 0 || bootstrapper_ == address(0)) revert InvalidParameters();
         poolManager = poolManager_;
         bootstrapper = bootstrapper_;
+    }
+
+    /// @dev The deployer until bound, then the factory owner.
+    function _upgrader() internal view override returns (address) {
+        return address(factory) == address(0) ? bootstrapper : _ownerOf(address(factory));
     }
 
     /// @notice One-time binding after the vault is bound to its factory. The

@@ -3,23 +3,27 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "BloomLaunch smart contracts: token launchpad on Robinhood Chain (bonding curves that present as Uniswap V3 pools, Uniswap V4 graduation, holder rewards, buybacks, BLOOM burn).",
+  "description": "BloomLaunch smart contracts: token launchpad on Elysium (bonding curves that present as Uniswap V3 pools, Uniswap V4 graduation with locked liquidity, holder rewards, buybacks, BLOOM burn, HyperEVM-Elysium fee bridge).",
   "license": "MIT",
   "repository": "github:bloomlaunch/bloomlaunch",
   "homepage": "https://bloomlaunch.fun",
   "scripts": {
     "compile": "node scripts/compile.mjs",
     "build:production": "node scripts/compile.mjs --production",
-    "test": "node --test --test-concurrency=1 test/contracts.test.mjs test/v4.test.mjs test/deploy.test.mjs test/migration.test.mjs test/bloom.test.mjs test/invariants.test.mjs test/v2.test.mjs",
+    "test": "node --test --test-concurrency=1 test/contracts.test.mjs test/v4.test.mjs test/deploy.test.mjs test/migration.test.mjs test/bloom.test.mjs test/invariants.test.mjs test/v2.test.mjs test/bridge.test.mjs",
     "test:fuzz": "node --test test/invariants.test.mjs",
     "deploy": "node scripts/deploy.mjs",
     "verify:sourcify": "node scripts/verify-sourcify.mjs config/robinhood-mainnet.deployment.json",
-    "verify:etherscan": "node scripts/verify-etherscan.mjs verification/robinhood-mainnet-v2.json"
+    "verify:etherscan": "node scripts/verify-etherscan.mjs verification/robinhood-mainnet-v2.json",
+    "dryrun:elysium": "node scripts/fork-dryrun.mjs config/deploy.elysium-mainnet.json",
+    "verify:elysium": "node scripts/verify-etherscan.mjs verification/elysium-mainnet.json",
+    "deploy:elysium": "npm run build:production && DEPLOY_CONFIG=config/deploy.elysium-mainnet.json RPC_URL=https://rpc.elysium.kinetiq.xyz node scripts/deploy.mjs --execute --confirm-mainnet"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.6.1",
     "@uniswap/v4-core": "1.0.2",
-    "ethers": "6.17.0"
+    "ethers": "6.17.0",
+    "@openzeppelin/contracts-upgradeable": "5.6.1"
   },
   "devDependencies": {
     "hardhat": "3.21.1",

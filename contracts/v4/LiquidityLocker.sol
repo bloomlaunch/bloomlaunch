@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -18,6 +19,7 @@ import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.so
 
 interface ILockerFactory { function locker() external view returns (address); }
 interface ILockerHook {
+    function validatePermissions() external view;
     function factory() external view returns (address);
     function poolManager() external view returns (address);
     function TICK_SPACING() external view returns (int24);
@@ -67,6 +69,7 @@ contract LiquidityLocker is IUnlockCallback {
         if (ILockerFactory(factory_).locker() != address(this) || ILockerHook(feeHook_).factory() != factory_
             || ILockerHook(feeHook_).poolManager() != address(poolManager)
             || ILockerHook(feeHook_).TICK_SPACING() != TICK_SPACING) revert InvalidParameters();
+        ILockerHook(feeHook_).validatePermissions();
         factory = factory_;
         feeHook = feeHook_;
         emit Bound(factory_, feeHook_);

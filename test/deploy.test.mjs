@@ -59,6 +59,6 @@ test('deployment script wires a working system and refuses wrong chains or bad c
     const escrow = attach(output.contracts, 'contracts/FeeEscrow.sol', 'FeeEscrow', c.FeeEscrow, trader);
     const before = await escrow.balances(weth, await platform.getAddress());
     await (await router.buy(token, E18, 1, await trader.getAddress(), 2n ** 64n, { value: E18 })).wait();
-    assert.equal(await escrow.balances(weth, await platform.getAddress()) - before, E18 * 20n / 10_000n);
+    assert.equal(await escrow.balances(weth, await platform.getAddress()) - before, E18 * 10n / 10_000n);
   } finally { await connection.close(); }
 });
