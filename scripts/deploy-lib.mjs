@@ -183,10 +183,15 @@ async function deployProxiedSystem({ signer, artifacts, config, economics, chain
       [contracts.FeeEscrow, config.platformRecipient, config.weth, config.bloomBurnBps, deployerAddress]);
     await install('BloomBurnAdapter', 'contracts/v4/CanonicalBuybackAdapter.sol', 'CanonicalBuybackAdapter', [config.poolManager, deployerAddress]);
   }
-  // v3 deployer: each launch clones fixed master contracts (about a fifth of the gas); v2 deploys them in full.
-  const launchDeployer = cloneLaunches
-    ? await create('contracts/v3/LaunchDeployerV3.sol', 'LaunchDeployerV3', [contracts.LaunchFactory])
-    : await create('contracts/v2/LaunchDeployerV2.sol', 'LaunchDeployerV2', [contracts.LaunchFactory]);
+  // Clone launches (default): each launch is two plain EIP-1167 clones of fixed master contracts (about a
+  // third of the gas); v2 deploys the token and curve in full.
+  let launchDeployer;
+  if (cloneLaunches) {
+    contracts.CurveMaster = await (await create('contracts/v3/BondingCurveV3.sol', 'BondingCurveV3', [])).getAddress();
+    contracts.TokenMaster = await (await create('contracts/v3/LaunchTokenV3.sol', 'LaunchTokenV3', [])).getAddress();
+    log(`masters: curve ${contracts.CurveMaster}, token ${contracts.TokenMaster}`);
+    launchDeployer = await create('contracts/v3/LaunchDeployerV4.sol', 'LaunchDeployerV4', [contracts.LaunchFactory, contracts.CurveMaster, contracts.TokenMaster]);
+  } else launchDeployer = await create('contracts/v2/LaunchDeployerV2.sol', 'LaunchDeployerV2', [contracts.LaunchFactory]);
   contracts.LaunchDeployer = await launchDeployer.getAddress();
   log(`LaunchDeployer: ${contracts.LaunchDeployer}`);
   const factoryIface = new Interface(art('contracts/v2/LaunchFactoryV2.sol', 'LaunchFactoryV2').abi);
@@ -255,6 +260,56 @@ export async function upgradeToCloneLaunches({ signer, artifacts, contracts, rea
   const iface = new Interface(artifacts[FACTORY[0]][FACTORY[1]].abi);
   await send('LaunchFactory upgradeToAndCall(initializeV2)', attach(artifacts, ...FACTORY, contracts.LaunchFactory, signer)
     .upgradeToAndCall(implementation, iface.encodeFunctionData('initializeV2', [deployerAddress])));
+  const now = await read(() => factoryView.deployer());
+  if (now.toLowerCase() !== deployerAddress.toLowerCase()) throw new Error(`upgrade not visible yet: deployer ${now}`);
+  return { LaunchDeployer: deployerAddress, LaunchFactoryImplementation: implementation, factoryArgs: args, ...masters, done: true };
+}
+
+/// Moves an existing factory to plain EIP-1167 clone launches (LaunchDeployerV4), which block explorers link to
+/// the masters' verified source. Reuses the masters of the current clone deployer when there is one (already
+/// verified), otherwise deploys them. Then a new factory implementation and upgradeToAndCall(initializeV3).
+/// Signed by the factory owner; idempotent (resumes after a partial run). Launched coins are untouched.
+export async function upgradeToStandardClones({ signer, artifacts, contracts, reader, existing = {}, onStep = () => {}, log = () => {} }) {
+  const provider = reader ?? signer.provider;
+  const read = async fn => { for (let i = 0; ; i++) { try { return await fn(); } catch (e) { if (i >= 9) throw e; await new Promise(r => setTimeout(r, 1500)); } } };
+  const send = async (label, promise) => { const receipt = await (await promise).wait(); log(`${label}: ${receipt.hash}`); await new Promise(r => setTimeout(r, 2000)); return receipt; };
+  const FACTORY = ['contracts/v2/LaunchFactoryV2.sol', 'LaunchFactoryV2'];
+  const V4 = ['contracts/v3/LaunchDeployerV4.sol', 'LaunchDeployerV4'];
+  const factoryView = attach(artifacts, ...FACTORY, contracts.LaunchFactory, provider);
+  const me = (await signer.getAddress()).toLowerCase();
+  if ((await read(() => factoryView.owner())).toLowerCase() !== me) throw new Error('only the factory owner can upgrade it; nothing sent');
+  const isV4 = async address => { try { return (await attach(artifacts, ...V4, address, provider).CLONE_KIND()) === 'eip1167'; } catch { return false; } };
+  const mastersOf = async address => { const d = attach(artifacts, ...V4, address, provider);
+    try { return { curveMaster: await d.curveMaster(), tokenMaster: await d.tokenMaster() }; } catch { return null; } };
+  const current = await read(() => factoryView.deployer());
+  if (await isV4(current)) { log(`already on standard clones: deployer ${current}`); return { LaunchDeployer: current, ...(await mastersOf(current)), done: true }; }
+  const create = async ([file, name], args) => {
+    const a = artifacts[file][name];
+    const c = await new ContractFactory(a.abi, a.evm.bytecode.object, signer).deploy(...args);
+    await c.waitForDeployment();
+    return c.getAddress();
+  };
+  let masters = existing.curveMaster && existing.tokenMaster ? { curveMaster: existing.curveMaster, tokenMaster: existing.tokenMaster } : await mastersOf(current);
+  if (!masters) {
+    masters = { curveMaster: await create(['contracts/v3/BondingCurveV3.sol', 'BondingCurveV3'], []),
+      tokenMaster: await create(['contracts/v3/LaunchTokenV3.sol', 'LaunchTokenV3'], []) };
+    await onStep({ ...masters });
+  }
+  log(`masters: curve ${masters.curveMaster}, token ${masters.tokenMaster}`);
+  let deployerAddress = existing.LaunchDeployer;
+  if (!deployerAddress || !(await isV4(deployerAddress))) {
+    deployerAddress = await create(V4, [contracts.LaunchFactory, masters.curveMaster, masters.tokenMaster]);
+    log(`LaunchDeployerV4: ${deployerAddress}`);
+    await onStep({ ...masters, LaunchDeployer: deployerAddress });
+  } else log(`LaunchDeployerV4: reusing ${deployerAddress}`);
+  const args = [await read(() => factoryView.platformRecipient()), await read(() => factoryView.escrow()),
+    await read(() => factoryView.buybackVault()), await read(() => factoryView.poolManager()), await read(() => factoryView.locker())];
+  const implementation = existing.LaunchFactoryImplementation ?? await create(FACTORY, args);
+  log(`LaunchFactory implementation: ${implementation}`);
+  await onStep({ ...masters, LaunchDeployer: deployerAddress, LaunchFactoryImplementation: implementation });
+  const iface = new Interface(artifacts[FACTORY[0]][FACTORY[1]].abi);
+  await send('LaunchFactory upgradeToAndCall(initializeV3)', attach(artifacts, ...FACTORY, contracts.LaunchFactory, signer)
+    .upgradeToAndCall(implementation, iface.encodeFunctionData('initializeV3', [deployerAddress])));
   const now = await read(() => factoryView.deployer());
   if (now.toLowerCase() !== deployerAddress.toLowerCase()) throw new Error(`upgrade not visible yet: deployer ${now}`);
   return { LaunchDeployer: deployerAddress, LaunchFactoryImplementation: implementation, factoryArgs: args, ...masters, done: true };

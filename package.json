@@ -16,9 +16,9 @@
     "verify:sourcify": "node scripts/verify-sourcify.mjs config/robinhood-mainnet.deployment.json",
     "verify:etherscan": "node scripts/verify-etherscan.mjs verification/robinhood-mainnet-v2.json",
     "dryrun:elysium": "node scripts/fork-dryrun.mjs config/deploy.elysium-mainnet.json",
-    "verify:elysium": "node scripts/verify-etherscan.mjs verification/elysium-mainnet.json && node scripts/verify-etherscan.mjs verification/elysium-clones.json",
+    "verify:elysium": "node scripts/verify-etherscan.mjs verification/elysium-mainnet.json && node scripts/verify-etherscan.mjs verification/elysium-clones.json && node scripts/verify-etherscan.mjs verification/elysium-standard-clones.json",
     "deploy:elysium": "npm run build:production && DEPLOY_CONFIG=config/deploy.elysium-mainnet.json RPC_URL=https://rpc.elysium.kinetiq.xyz node scripts/deploy.mjs --execute --confirm-mainnet",
-    "rehearse:clones": "node scripts/rehearse-clone-upgrade.mjs"
+    "rehearse:clones": "node scripts/rehearse-clone-upgrade.mjs --standard"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.6.1",

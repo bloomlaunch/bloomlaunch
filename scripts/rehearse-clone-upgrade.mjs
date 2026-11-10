@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { network } from 'hardhat';
 import { BrowserProvider, JsonRpcSigner, ZeroHash, formatEther, parseEther } from 'ethers';
 import { output } from './compile.mjs';
-import { attach, upgradeToCloneLaunches } from './deploy-lib.mjs';
+import { attach, upgradeToCloneLaunches, upgradeToStandardClones } from './deploy-lib.mjs';
 import { mineTokenSalt } from '../sdk/vanity.mjs';
 
 const d = JSON.parse(fs.readFileSync('config/elysium-mainnet.deployment.json', 'utf8'));
@@ -27,7 +27,10 @@ const before = { owner: await factory.owner(), deployer: await factory.deployer(
 console.log(`factory owner ${before.owner}, deployer ${before.deployer}`);
 
 const from = await provider.getBlockNumber();
-const up = await upgradeToCloneLaunches({ signer, artifacts: art, contracts: c, log: l => console.log('  ' + l) });
+// --standard rehearses the second move (plain EIP-1167 clones that explorers link to the verified masters).
+const standard = process.argv.includes('--standard');
+const up = standard ? await upgradeToStandardClones({ signer, artifacts: art, contracts: c, log: l => console.log('  ' + l) })
+  : await upgradeToCloneLaunches({ signer, artifacts: art, contracts: c, log: l => console.log('  ' + l) });
 let gas = 0n, txs = 0;
 for (let b = from + 1; b <= await provider.getBlockNumber(); b++) for (const h of (await provider.getBlock(b)).transactions) {
   const r = await provider.getTransactionReceipt(h); if (r.from.toLowerCase() === owner.toLowerCase()) { gas += r.gasUsed; txs++; }
@@ -57,6 +60,7 @@ const rc = await (await router.launch(p, 0, weth, minBuy, 0, deadline, { value: 
 check(token.toLowerCase().endsWith('b00b'), `launched ${token} (b00b suffix)`);
 const code = await provider.getCode(token);
 check(code.startsWith('0x363d3d373d3d3d363d73' + up.tokenMaster.slice(2).toLowerCase()), 'token is an EIP-1167 clone of the master');
+if (standard) check(code.length === 2 + 45 * 2, 'token is exactly the 45-byte standard clone');
 const tc = attach(art, 'contracts/v3/LaunchTokenV3.sol', 'LaunchTokenV3', token, user);
 check(await tc.name() === 'Clone Check' && await tc.symbol() === 'CLONE' && await tc.balanceOf(me) > 0n, 'name, symbol, first buy');
 const curve = attach(art, 'contracts/v3/BondingCurveV3.sol', 'BondingCurveV3', (await f.launches(token)).curve, user);

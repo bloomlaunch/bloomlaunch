@@ -3,7 +3,7 @@ import test from 'node:test';
 import { network } from 'hardhat';
 import { BrowserProvider, ContractFactory, ZeroHash, keccak256 } from 'ethers';
 import { output } from '../scripts/compile.mjs';
-import { CREATE2_PROXY, attach, deploySystemV2, launchBloom, upgradeToCloneLaunches } from '../scripts/deploy-lib.mjs';
+import { CREATE2_PROXY, attach, deploySystemV2, launchBloom, upgradeToCloneLaunches, upgradeToStandardClones } from '../scripts/deploy-lib.mjs';
 import { mineTokenSalt } from '../sdk/vanity.mjs';
 
 const PROXY_RUNTIME = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3';
@@ -131,6 +131,59 @@ test('clone launches: in-place factory upgrade, old coins untouched, new coins a
     assert.ok(await token.balanceOf(b) > before, 'trades on the V4 pool after graduation');
     // Holder rewards accrue on the clone token.
     assert.ok(await token.totalFunded() > 0n, 'holder rewards funded');
+
+    // Second move: plain 45-byte EIP-1167 clones (what explorers recognize), reusing the same masters.
+    await assert.rejects(upgradeToStandardClones({ signer: w[5], artifacts: output.contracts, contracts: c }), /only the factory owner/);
+    const std = await upgradeToStandardClones({ signer: w[0], artifacts: output.contracts, contracts: c });
+    assert.equal(await factory.deployer(), std.LaunchDeployer);
+    assert.equal(std.curveMaster, await dep.curveMaster(), 'reuses the verified curve master');
+    assert.equal(std.tokenMaster, await dep.tokenMaster(), 'reuses the verified token master');
+    assert.equal((await upgradeToStandardClones({ signer: w[0], artifacts: output.contracts, contracts: c })).LaunchDeployer, std.LaunchDeployer, 'idempotent');
+    await assert.rejects(factory.initializeV3(std.LaunchDeployer), 'initializeV3 runs once');
+    await assert.rejects(factory.initializeV2(std.LaunchDeployer), 'initializeV2 can no longer run');
+    // A locked-master check guards the V4 constructor: an unlocked clone cannot be passed as a master.
+    await assert.rejects(new ContractFactory(art('contracts/v3/LaunchDeployerV4.sol', 'LaunchDeployerV4').abi,
+      art('contracts/v3/LaunchDeployerV4.sol', 'LaunchDeployerV4').evm.bytecode.object, w[0]).deploy(c.LaunchFactory, curveAddr, fresh.token));
+    assert.equal(await factory.platformToken(), bloom);
+    assert.equal(await factory.minInitialBuy(), MIN_BUY);
+
+    const plain = await launch(params('Plain Coin', '0x' + '03'.repeat(32), a[3]), a[3], w[3]);
+    assert.ok(plain.token.toLowerCase().endsWith('b00b'));
+    console.log(`standard clone launch gas ${plain.gas}`);
+    assert.ok(plain.gas * 2n < old.gas, 'standard clone launch costs well under half');
+    const plainCurve = (await factory.launches(plain.token)).curve;
+    for (const [address, master] of [[plain.token, std.tokenMaster], [plainCurve, std.curveMaster]]) {
+      assert.equal(await provider.getCode(address), minimal(master), 'exactly the 45-byte EIP-1167 clone of the master');
+    }
+    const pt = at('contracts/v3/LaunchTokenV3.sol', 'LaunchTokenV3', plain.token);
+    const pc = at('contracts/v3/BondingCurveV3.sol', 'BondingCurveV3', plainCurve);
+    assert.equal(await pt.name(), 'Plain Coin');
+    assert.equal(await pt.excluded(std.LaunchDeployer), true);
+    assert.equal(await pc.initializer(), std.LaunchDeployer);
+    await assert.rejects(pc.setup(await pc.settings()), 'standard clone curve set up once');
+    await assert.rejects(pt.initialize('X', 'X', a[0], 1n, config.weth, [], a[0], 0n), 'standard clone token initialized once');
+    // Copying someone's mined tokenSalt only makes one of the two launches fail; nothing else happens.
+    const copy = params('Copy Cat', '0x' + '04'.repeat(32), a[5]);
+    copy.expectedEconomics = await factory.previewEconomics(0, config.weth);
+    const [, , initHashStd] = await factory.tokenInitHash(a[5], copy, 0, config.weth);
+    const mined = (await mineTokenSalt(std.LaunchDeployer, initHashStd)).salt;
+    copy.tokenSalt = mined;
+    await tx(router.connect(w[5]).launch(copy, 0, config.weth, MIN_BUY, 0, await deadline(), { value: MIN_BUY }));
+    const victim = params('Victim', '0x' + '05'.repeat(32), a[6]);
+    victim.expectedEconomics = copy.expectedEconomics; victim.tokenSalt = mined;
+    await assert.rejects(router.connect(w[6]).launch(victim, 0, config.weth, MIN_BUY, 0, await deadline(), { value: MIN_BUY }), 'reused salt: second launch reverts');
+    await launch(victim, a[6], w[6]);   // ...and succeeds with a fresh search
+
+    // Trade and graduate the standard clone.
+    await rpc('evm_increaseTime', [301]); await rpc('evm_mine');
+    await tx(router.connect(buyer).buy(plain.token, E18 / 10n, 1, b, await deadline(), { value: E18 / 10n }));
+    const ph = await pt.balanceOf(b);
+    await tx(pt.connect(buyer).approve(c.LaunchRouter, ph));
+    await tx(router.connect(buyer).sell(plain.token, ph / 2n, 1, b, await deadline(), true));
+    const [, g2] = await pc.quoteBuy(10n ** 40n);
+    await tx(router.connect(buyer).buy(plain.token, g2 + E18, 1, b, await deadline(), { value: g2 + E18, gasLimit: 12_000_000n }));
+    assert.equal(Number(await pc.phase()), 3, 'standard clone graduated');
+    assert.ok(await locker.isLocked((await factory.launches(plain.token)).poolId));
   } finally {
     await connection.close();
   }

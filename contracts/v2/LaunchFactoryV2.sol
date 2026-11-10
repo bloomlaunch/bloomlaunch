@@ -135,7 +135,13 @@ contract LaunchFactoryV2 is Ownable2StepUpgradeable, ReentrancyGuard, CoreUpgrad
     /// @notice Points new launches at another deployer with the same interface (LaunchDeployerV3, which
     /// clones fixed master contracts). Run once, by the owner, through `upgradeToAndCall`. Tokens and
     /// curves already launched are untouched; the old deployer simply stops being used.
-    function initializeV2(LaunchDeployer deployer_) external reinitializer(2) {
+    function initializeV2(LaunchDeployer deployer_) external reinitializer(2) { _setDeployer(deployer_); }
+
+    /// @notice Second deployer move (LaunchDeployerV4: plain EIP-1167 clones of the same masters, which
+    /// explorers link to the masters' verified source). Same rules as `initializeV2`.
+    function initializeV3(LaunchDeployer deployer_) external reinitializer(3) { _setDeployer(deployer_); }
+
+    function _setDeployer(LaunchDeployer deployer_) private {
         if (msg.sender != owner()) revert Unauthorized();
         if (address(deployer_).code.length == 0 || deployer_.factory() != address(this)) revert InvalidParameters();
         deployer = deployer_;

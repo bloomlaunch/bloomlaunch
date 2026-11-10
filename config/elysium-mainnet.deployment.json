@@ -84,5 +84,13 @@
     "LaunchFactoryImplementation": "0x4A0B59c204360A2fb60c4488B1668232B5e8cA04",
     "upgradeTx": "0xa5e415c9eb49366fbaddef2befd177d1c8722a8df13319a7c748e5d65cfa9a27",
     "previousLaunchDeployer": "0xbA2201d1e24E90d29347B19d92ad249b9CbbBdf1"
+  },
+  "standardClones": {
+    "since": "2026-11-10",
+    "LaunchDeployer": "0xC87008A385A2136682CcB8Cc44B61e486aB6590F",
+    "curveMaster": "0xA1DAA96dc8cB85a87fE3E14Ad7be7de630C4dBb2",
+    "tokenMaster": "0x18c98c9e779B0c5f3eEe1BC2cb67e3651d6A6597",
+    "LaunchFactoryImplementation": "0xA8cabC3112082EAB09F6A334100A4a9a286F2d7b",
+    "upgradeTx": "0xd2b55a2441f6534086bf7344638d6a6597c26b408c530202260e475751289d6b"
   }
 }
